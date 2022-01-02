@@ -12,19 +12,6 @@ if "PYDEVD_USE_FRAME_EVAL" in os.environ: # If using the Python Dev add-on for b
 ################################################################################################################
 
 
-def get_datafile_paths(datafile_type):
-    '''TODO Possible method for getting thumbnail previews?'''
-    system_rss = bpy.utils.resource_path('SYSTEM')
-    userpref_rss = bpy.utils.resource_path('USER')
-
-    if datafile_type == 'matcap':
-        pass
-    elif datafile_type == 'studio':
-        pass
-    elif datafile_type == 'world':
-        pass
-
-
 def poll_active_screenshot_item(context) -> bool:
     '''Poll for the active screenshot item'''
     scene = context.scene
@@ -92,6 +79,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         )
 
     def get_space_data(self, context) -> None:
+        '''Gets the active space data based on where the cursor is located and handles poor contexts'''
         if context.area.type != 'VIEW_3D':
             self.saved_area_type = context.area.type
 
@@ -102,17 +90,17 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         self.space_data = context.space_data
 
     def save_settings(self, context) -> None:
+        '''Saves all to-be modified settings mostly recursively'''
         shading = self.space_data.shading
         overlay = self.space_data.overlay
-        scene = context.scene
-        render = scene.render
+        render = context.scene.render
 
         # Use dir() to save every entry in the UI
         #
         # This will end up saving a lot of unnecessary data, but is very
         # modular comparedto saving everything we need individually
         self.saved_settings = {}
-        
+
         for data in (shading, render, render.image_settings):
             for attr in dir(data):
                 if data not in self.saved_settings:
@@ -120,18 +108,17 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
 
                 self.saved_settings[data][attr] = getattr(data, attr)
 
-        # Manual dict values (for when we only need to cherry pick one or two values from each "group")
+        # Manual dict values (only for when we need to cherry pick one or two values from each "group")
         self.saved_settings[overlay] = {'show_overlays': overlay.show_overlays}
-        self.saved_settings[scene] = {'camera': scene.camera}
-
-        # TODO Save original camera
+        self.saved_settings[context.scene] = {'camera': context.scene.camera}
 
     def load_saved_settings(self, context) -> None:
-        # Return original UI
+        '''A "refresh" method that returns all changed attributes to their original values mostly recursively'''
+        # Original UI
         if self.saved_area_type is not None:
             context.area.type = self.saved_area_type
 
-        # Return original shading, overlay, file path, etc settings
+        # Original shading, overlay, file path, etc settings
         self.saved_settings_overflow = {}
         for key, values in self.saved_settings.items():
             for name, value in dict(values).items(): # dict() is unecessary but the syntax is missing otherwise
@@ -142,10 +129,12 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
                 except TypeError: # This seems to only happen with color depth (bad context), keep debug log for future exceptions
                     log.debug(f'{name}: {value} had a TypeError, this should be normal.')
 
+        # Original camera view
         if self.switch_cam:
             bpy.ops.view3d.view_camera()
 
     def load_user_sett(self, context, active_scrshot) -> None:
+        '''Load per screenshot settings such as file pathing, resolution and render setups'''
         def handle_name_suffix(file_path) -> str:
             counter = 1
             new_file_path = file_path + '_{:04d}'.format(counter)
@@ -158,8 +147,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
 
         scene = context.scene
         render = scene.render
-
-        scene.camera = active_scrshot.camera_ob
+        shading = self.space_data.shading
 
         if active_scrshot.use_subfolder:
             path_end = os.path.join(active_scrshot.subfolder_name, active_scrshot.name)
@@ -167,23 +155,45 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
             path_end = active_scrshot.name
 
         file_path = handle_name_suffix(os.path.join(bpy.path.abspath(scene.screenshot_saver.export_path), path_end))
-
         render.filepath = file_path
+
+        scene.camera = active_scrshot.camera_ob
 
         render.resolution_x = active_scrshot.cam_res_x
         render.resolution_y = active_scrshot.cam_res_y
 
         if active_scrshot.render_type == 'workbench':
-            self.space_data.shading.type = 'SOLID'
+            shading.type = 'SOLID'
 
             if not active_scrshot.use_defaults:
-                self.space_data.shading.light = str(active_scrshot.lighting_type).upper()
+                shading.light = str(active_scrshot.lighting_type).upper()
 
-        else: # EEVEE
+                if active_scrshot.lighting_type == 'studio':
+                    shading.use_world_space_lighting = active_scrshot.use_wsl
+                    shading.studiolight_rotate_z = active_scrshot.studio_rotate_z
+
+                shading.studio_light = active_scrshot.studio_light_name
+
+                shading.show_backface_culling = active_scrshot.use_backface_culling
+                shading.show_object_outline = active_scrshot.use_outline
+                shading.show_cavity = active_scrshot.use_cavity
+                shading.show_specular_highlight = active_scrshot.use_spec_lighting
+
+                shading.cavity_type = 'BOTH'
+                shading.cavity_ridge_factor = active_scrshot.cavity_ridge
+                shading.cavity_valley_factor = active_scrshot.cavity_valley
+                shading.curvature_ridge_factor = active_scrshot.curve_ridge
+                shading.curvature_valley_factor = active_scrshot.curve_valley
+
+                shading.object_outline_color = active_scrshot.outliner_color_value
+
+                shading.color_type = str(active_scrshot.color_type).upper()
+        else: # TODO EEVEE
             render.engine = 'BLENDER_EEVEE'
-            self.space_data.shading.type = 'RENDERED'
+            shading.type = 'RENDERED'
 
     def load_misc_sett(self, context) -> None:
+        '''Set a handful of render settings that are maintained across all screenshot renders'''
         scene = context.scene
         render = scene.render
         shading = self.space_data.shading
@@ -194,6 +204,9 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         self.space_data.overlay.show_overlays = False
 
         shading.use_dof = False
+        shading.show_xray = False
+        shading.show_shadows = False
+
         shading.use_scene_world = False
         shading.use_scene_lights = False
 
@@ -204,6 +217,8 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         render.use_render_cache = False
         render.use_overwrite = True
         render.use_placeholder = False
+
+        # TODO Does isolate toggle operator not work when taking screenshots?
 
         if context.space_data.region_3d.view_perspective != 'CAMERA':
             self.switch_cam = True
@@ -223,6 +238,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
             image_settings.color_depth = '16'
 
     def render_screenshot(self, context) -> int:
+        '''A base for calling per screenshot setup methods and rendering each screenshot'''
         if self.render_type == 'enabled':
             scrshot_camera_coll = context.scene.scrshot_camera_coll
 
@@ -254,7 +270,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
 
         # Save current shading settings
         self.save_settings(context)
-
+        
         # Load misc/generic settings that will apply to all rendered screenshots
         self.load_misc_sett(context)
 
@@ -538,6 +554,100 @@ class SCRSHOT_OT_paste_screenshot_settings(OpInfo, Operator):
 
 ### OUTLINER SETTINGS OPS ###
 
+
+class SCRSHOT_OT_copy_viewport_shade_settings(OpInfo, Operator): # TODO
+    """Get the viewport shading settings of the actively selected viewport"""
+    bl_idname = "scrshot.copy_viewport_shade_settings"
+    bl_label = "Clone 3D Viewport Shading"
+    bl_options = {'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context):
+        return poll_active_screenshot_item(context)
+
+    def execute(self, context):
+        shading = context.space_data.shading
+
+        active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
+
+        # Apply all active shading settings
+        active_scrshot.lighting_type = str(shading.light).lower()
+        active_scrshot.color_type = str(shading.color_type).lower()
+
+        active_scrshot.studio_rotate_z = shading.studiolight_rotate_z
+        active_scrshot.use_wsl = shading.use_world_space_lighting
+
+        active_scrshot.use_backface_culling = shading.show_backface_culling
+        active_scrshot.use_cavity = shading.show_cavity
+        active_scrshot.use_outline = shading.show_object_outline
+        active_scrshot.use_spec_lighting = shading.show_specular_highlight
+
+        active_scrshot.cavity_ridge = shading.cavity_ridge_factor
+        active_scrshot.cavity_valley = shading.cavity_valley_factor
+        active_scrshot.curve_ridge = shading.curvature_ridge_factor
+        active_scrshot.curve_valley = shading.curvature_valley_factor
+
+        active_scrshot.outliner_color_value = shading.object_outline_color
+
+        active_scrshot.single_color_value = shading.single_color
+
+        # Apply all studio lights individually
+        saved_lighting_type = active_scrshot.lighting_type
+
+        if active_scrshot.render_type == 'workbench':
+            active_scrshot.lighting_type = 'studio'
+            bpy.ops.scrshot.get_studio_light()
+
+            active_scrshot.lighting_type = 'matcap'
+            bpy.ops.scrshot.get_studio_light()
+        else: # TODO EEVEE
+            pass
+
+        active_scrshot.lighting_type = saved_lighting_type
+
+        self.report({'INFO'}, "Copied shading settings!")
+        return {'FINISHED'}
+
+
+class SCRSHOT_OT_get_studio_light(OpInfo, Operator):
+    """Get the active viewports studio light. Ideally in the future you will be able to select a studio light from here directly"""
+    bl_idname = "scrshot.get_studio_light"
+    bl_label = "Get Studio Light"
+    bl_options = {'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context):
+        return poll_active_screenshot_item(context)
+
+    def execute(self, context):
+        shading = context.space_data.shading
+
+        saved_shading_type = shading.type
+        saved_shading_light = shading.light
+
+        active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
+        if active_scrshot.render_type == 'workbench':
+            shading.type = 'SOLID'
+
+            if active_scrshot.lighting_type == 'studio':
+                shading.light = 'STUDIO'
+                active_scrshot.studio_light_name = shading.studio_light
+
+            elif active_scrshot.lighting_type == 'matcap':
+                shading.light = 'MATCAP'
+                active_scrshot.matcap_light_name = shading.studio_light
+        else: # TODO EEVEE
+            shading.type = 'MATERIAL'
+
+            active_scrshot.eevee_light_name = shading.studio_light
+
+        shading.type = saved_shading_type
+        shading.light = saved_shading_light
+
+        self.report({'INFO'}, "Copied studio light name!")
+        return {'FINISHED'}
+
+
 class SCRSHOT_OT_sample_studio_light_rotation(OpInfo, Operator):
     """Move an object with the mouse, example"""
     bl_idname = "scrshot.sample_studio_light_rotation"
@@ -621,9 +731,11 @@ classes = (
     SCRSHOT_OT_delete_screenshot_item,
     SCRSHOT_OT_render_screenshots,
     SCRSHOT_OT_select_and_preview,
-    SCRSHOT_OT_sample_studio_light_rotation,
     SCRSHOT_OT_copy_screenshot_settings,
-    SCRSHOT_OT_paste_screenshot_settings
+    SCRSHOT_OT_paste_screenshot_settings,
+    SCRSHOT_OT_copy_viewport_shade_settings,
+    SCRSHOT_OT_get_studio_light,
+    SCRSHOT_OT_sample_studio_light_rotation
 )
 
 def register():

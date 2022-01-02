@@ -10,8 +10,7 @@ bl_info = {
 }
 
 
-import importlib, bpy
-from bpy.app.handlers import persistent
+import importlib, bpy, time
 from .operators import display_error_message
 
 
@@ -20,9 +19,11 @@ from .operators import display_error_message
 ################################################################################################################
 
 
-@persistent
+old_time = 0
+@bpy.app.handlers.persistent
 def screenshot_save_handler(scene) -> None:
     '''Handles saving screenshots whenever the file is saved'''
+    global old_time
     scene = bpy.context.scene
 
     if scene.screenshot_saver.record_on_save:
@@ -30,7 +31,11 @@ def screenshot_save_handler(scene) -> None:
             display_error_message('Could not render because no screenshot cameras exist.') # Send this before saving
             return None
 
-        bpy.ops.scrshot.render_screenshots()
+        # Render buffer when saving more than one time every 5 seconds
+        if time.time() - old_time > 5:
+            bpy.ops.scrshot.render_screenshots()
+
+            old_time = time.time()
 
 
 ################################################################################################################

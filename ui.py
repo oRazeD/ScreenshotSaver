@@ -1,4 +1,5 @@
 import bpy, os
+from bpy.types import Panel
 from .operators import poll_active_screenshot_item
 
 
@@ -12,6 +13,15 @@ class PanelInfo: # Mix-in class
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
 
+def get_active_scrshot():
+    scene = bpy.context.scene
+
+    try:
+        active_scrshot = scene.scrshot_camera_coll[scene.scrshot_camera_index]
+    except IndexError:
+        scene.scrshot_camera_index = -1
+        active_scrshot = scene.scrshot_camera_coll[scene.scrshot_camera_index]
+    return active_scrshot
 
 class SCRSHOT_UL_items(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
@@ -19,11 +29,21 @@ class SCRSHOT_UL_items(bpy.types.UIList):
         row = split.row()
         row.prop(item, 'enabled', text='')
 
-        sel_and_preview_scrshot = row.operator('scrshot.select_and_preview', text='', icon='VIEW_CAMERA', emboss=False)
+        sel_and_preview_scrshot = row.operator(
+            'scrshot.select_and_preview',
+            text='',
+            icon='VIEW_CAMERA' if context.scene.camera == item.camera_ob else 'OUTLINER_DATA_CAMERA',
+            emboss=False
+        )
         sel_and_preview_scrshot.scrshot_name = item.name
         sel_and_preview_scrshot.preview_cam = True
 
-        sel_scrshot = row.operator('scrshot.select_and_preview', text='', icon='RESTRICT_SELECT_OFF', emboss=False)
+        sel_scrshot = row.operator(
+            'scrshot.select_and_preview',
+            text='',
+            icon='RESTRICT_SELECT_OFF',
+            emboss=False
+        )
         sel_scrshot.scrshot_name = item.name
         sel_scrshot.preview_cam = False
 
@@ -31,7 +51,7 @@ class SCRSHOT_UL_items(bpy.types.UIList):
         row.prop(item, 'name', text='', emboss=False)
 
 
-class SCRSHOT_PT_ui(PanelInfo, bpy.types.Panel):
+class SCRSHOT_PT_ui(PanelInfo, Panel):
     bl_label = 'Screenshot Saver'
 
     def draw(self, context):
@@ -67,31 +87,27 @@ class SCRSHOT_PT_ui(PanelInfo, bpy.types.Panel):
         row.alert = False
         row.operator('scrshot.open_folder', text='', icon='FOLDER_REDIRECT')
 
-        box.separator(factor=.5)
-
         render = context.scene.render
         image_settings = render.image_settings
 
-        
-        split = box.split(factor=.35)
+        col = box.column()
+
+        split = col.split(factor=.35)
         split.label(text='Format')
         split.prop(scrshot_saver, 'format_type', text='')
 
         # EXR settings not necessary
         if scrshot_saver.format_type == 'png':
-            box.prop(image_settings, 'compression', text='Lossless Compression')
+            col.prop(image_settings, 'compression', text='Lossless Compression')
         elif scrshot_saver.format_type == 'jpeg':
-            box.prop(image_settings, 'quality')
+            col.prop(image_settings, 'quality')
 
 
-class SCRSHOT_PT_screenshot_manager(PanelInfo, bpy.types.Panel):
+class SCRSHOT_PT_screenshot_manager(PanelInfo, Panel):
     bl_label = 'Screenshot Manager'
-    bl_options = {'HEADER_LAYOUT_EXPAND'}
     bl_parent_id = "SCRSHOT_PT_ui"
 
     def draw(self, context):
-        scene = context.scene
-
         layout = self.layout
 
         col = layout.column(align=True)
@@ -103,13 +119,13 @@ class SCRSHOT_PT_screenshot_manager(PanelInfo, bpy.types.Panel):
             context.space_data,
             'lock_camera',
             text='Lock Camera to View',
-            icon='LOCKED' if context.space_data.lock_camera else 'UNLOCKED'
+            icon='LOCKVIEW_ON' if context.space_data.lock_camera else 'LOCKVIEW_OFF'
             )
 
         row = layout.row()
 
         col1 = row.column(align=True)
-        col1.template_list("SCRSHOT_UL_items", "", scene, "scrshot_camera_coll", scene, "scrshot_camera_index", rows=4)
+        col1.template_list("SCRSHOT_UL_items", "", context.scene, "scrshot_camera_coll", context.scene, "scrshot_camera_index", rows=4)
 
         col2 = row.column(align=True)
         col2.operator("scrshot.add_screenshot_item", text='', icon='ADD')
@@ -121,13 +137,13 @@ class SCRSHOT_PT_screenshot_manager(PanelInfo, bpy.types.Panel):
         col3.operator("scrshot.copy_screenshot_settings", text='', icon='COPYDOWN')
         col3.operator("scrshot.paste_screenshot_settings", text='', icon='PASTEDOWN')
 
-        if not len(scene.scrshot_camera_coll):
+        if not len(context.scene.scrshot_camera_coll):
             box = layout.box()
             box.label(text='Add a new screenshot', icon='INFO')
             box.label(text='item to get started!', icon='BLANK1')
 
 
-class SCRSHOT_PT_screenshot_settings(PanelInfo, bpy.types.Panel):
+class SCRSHOT_PT_screenshot_settings(PanelInfo, Panel):
     bl_label = 'Screenshot Settings'
     bl_parent_id = "SCRSHOT_PT_screenshot_manager"
 
@@ -136,22 +152,11 @@ class SCRSHOT_PT_screenshot_settings(PanelInfo, bpy.types.Panel):
         return poll_active_screenshot_item(context)
 
     def draw(self, context):
-        scene = context.scene
+        active_scrshot = get_active_scrshot()
 
         layout = self.layout
-
-        try:
-            active_scrshot = scene.scrshot_camera_coll[scene.scrshot_camera_index]
-        except IndexError:
-            scene.scrshot_camera_index = -1
-            active_scrshot = scene.scrshot_camera_coll[scene.scrshot_camera_index]
-
-        ### GENERAL SETTINGS ###
-
-        col = layout.column(align=True)
-        box = col.box()
     
-        split = box.split(factor=.3)
+        split = layout.split(factor=.3)
         split.label(text='Camera')
 
         row = split.row()
@@ -161,7 +166,7 @@ class SCRSHOT_PT_screenshot_settings(PanelInfo, bpy.types.Panel):
         if active_scrshot.camera_ob:
             camera_data = active_scrshot.camera_ob.data
 
-            split = box.split(factor=.3)
+            split = layout.split(factor=.3)
             split.label(text='Res')
 
             row = split.row(align=True)
@@ -169,12 +174,12 @@ class SCRSHOT_PT_screenshot_settings(PanelInfo, bpy.types.Panel):
             row.prop(active_scrshot, 'cam_res_y', text='')
             row.prop(active_scrshot, 'lock_res', text='', icon='LOCKED' if active_scrshot.lock_res else 'UNLOCKED')
 
-            split = box.split(factor=.3)
+            split = layout.split(factor=.3)
             split.label(text='Type')
             split.prop(active_scrshot, 'cam_type', text='')
 
             if camera_data.type == 'PERSP':
-                split = box.split(factor=.3, align=True)
+                split = layout.split(factor=.3, align=True)
                 split.label(text='Focal')
 
                 row = split.row(align=True)
@@ -184,38 +189,35 @@ class SCRSHOT_PT_screenshot_settings(PanelInfo, bpy.types.Panel):
                     row.prop(camera_data, 'angle', text='')
                 row.prop(active_scrshot, 'lens_type', text='')
             else: # Ortho
-                split = box.split(factor=.3, align=True)
+                split = layout.split(factor=.3, align=True)
                 split.label(text='Scale')
                 split.prop(camera_data, 'ortho_scale', text='')
 
-            col.separator(factor=.5)
-
-            split = box.split()
+            split = layout.split()
             split.prop(camera_data, 'passepartout_alpha')
 
-            split = box.split()
+            split = layout.split()
             split.prop(camera_data, 'display_size')
 
-        ### EXPORT SETTINGS ###
 
-        box = col.box()
+class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
+    bl_label = 'Shading'
+    bl_parent_id = "SCRSHOT_PT_screenshot_settings"
 
-        split = box.split(factor=.35)
-        split.label(text='')
-        split.prop(active_scrshot, 'use_subfolder')
+    def draw(self, context):
+        active_scrshot = get_active_scrshot()
 
-        split = box.split(factor=.3)
-        split.enabled = active_scrshot.use_subfolder
-        split.label(text='Dir Name')
-        split.prop(active_scrshot, 'subfolder_name', text='')
-
-        ### SHADING SETTINGS ###
+        layout = self.layout
 
         col = layout.column(align=True)
 
         row = col.row(align=True)
-        row.scale_y = 1.2
+        row.scale_y = 1.25
         row.prop(active_scrshot, 'render_type', expand=True)
+
+        row = col.row(align=True)
+        row.scale_y = 1.1
+        row.operator("scrshot.copy_viewport_shade_settings", icon='COPYDOWN')
 
         box = col.box()
 
@@ -230,28 +232,106 @@ class SCRSHOT_PT_screenshot_settings(PanelInfo, bpy.types.Panel):
             row_shad = col_shading.row(align=True)
             row_shad.prop(active_scrshot, 'lighting_type', expand=True)
 
-            box_shad = col_shading.box()
+            if active_scrshot.lighting_type in {'studio', 'matcap'}:
+                split = col_shading.split(factor=.6, align=True)
+                split.operator("scrshot.get_studio_light", icon='MATSPHERE', text='Get Studio Light' if active_scrshot.lighting_type == 'studio' else 'Get MatCap')
+
+                row = split.row(align=True)
+                row.enabled = False
+                row.prop(
+                    active_scrshot,
+                    'studio_light_name' if active_scrshot.lighting_type == 'studio' else 'matcap_light_name',
+                    text=''
+                )
 
             if active_scrshot.lighting_type == 'studio':
-                split = box_shad.split(align=True, factor=.15)
+                split = col_shading.split(factor=.15)
 
-                row = split.row()
-                row.prop(active_scrshot, 'use_wsl', text='', icon='WORLD')
+                split.prop(active_scrshot, 'use_wsl', text='', icon='WORLD')
 
                 row = split.row(align=True)
                 row.enabled = active_scrshot.use_wsl
-                row.operator("scrshot.sample_studio_light_rotation", text='', icon='EYEDROPPER')
+                row.operator("scrshot.sample_studio_light_rotation", text='', icon='ARROW_LEFTRIGHT')
                 row.prop(active_scrshot, 'studio_rotate_z')
 
-            #elif active_scrshot.lighting_type == 'matcap':
-            #    box_shad.template_icon_view(context.space_data.shading, "studio_light", scale_popup=2.5) # How do I recreate this??
-            #else: # flat
-            #    pass
+            col_shading.separator(factor=1.5)
+
+            col_flow = col_shading.column_flow(columns=3, align=True)
+            col_flow.prop(active_scrshot, 'color_type', expand=True)
+
+            if active_scrshot.color_type == 'single':
+                col = col_shading.column(align=True)
+                col.scale_y = .9
+                col.prop(active_scrshot, 'single_color_value', text='')
+
+            col = col_shading.column()
+            col.separator()
+
+            box = col.box()
+            box.prop(active_scrshot, 'use_backface_culling')
+
+            col = col_shading.column()
+            col.separator(factor=.25)
+
+            box = col.box()
+            box.prop(active_scrshot, 'use_cavity')
+
+            if active_scrshot.use_cavity:
+                col_2 = box.column()
+
+                col_2.label(text='World Space')
+
+                row = col_2.row(align=True)
+                row.prop(active_scrshot, 'cavity_ridge', text='Ridge')
+                row.prop(active_scrshot, 'cavity_valley', text='Valley')
+
+                col_2.label(text='Screen Space')
+
+                row2 = col_2.row(align=True)
+                row2.prop(active_scrshot, 'curve_ridge', text='Ridge')
+                row2.prop(active_scrshot, 'curve_valley', text='Valley')
+
+            col = col_shading.column()
+            col.separator(factor=.25)
+
+            box = col.box()
+            split = box.split()
+            split.prop(active_scrshot, 'use_outline')
+
+            if active_scrshot.use_outline:
+                split.prop(active_scrshot, 'outliner_color_value', text='')
+
+            if active_scrshot.lighting_type == 'studio':
+                col = col_shading.column()
+                col.separator(factor=.25)
+
+                box = col.box()
+                box.prop(active_scrshot, 'use_spec_lighting')
         else: # EEVEE
             pass
 
 
-class SCRSHOT_PT_convert_ui(PanelInfo, bpy.types.Panel):
+class SCRSHOT_PT_screenshot_export_settings(PanelInfo, Panel):
+    bl_label = 'Export'
+    bl_parent_id = "SCRSHOT_PT_screenshot_settings"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        active_scrshot = get_active_scrshot()
+
+        layout = self.layout
+
+        split = layout.split(factor=.35)
+        split.label(text='')
+        split.prop(active_scrshot, 'use_subfolder')
+
+        split = layout.split(factor=.3)
+        split.enabled = active_scrshot.use_subfolder
+        split.label(text='Dir Name')
+        split.prop(active_scrshot, 'subfolder_name', text='')
+
+
+class SCRSHOT_PT_convert_ui(PanelInfo, Panel):
     bl_label = 'Convert Media'
     bl_parent_id = "SCRSHOT_PT_ui"
     bl_options = {'DEFAULT_CLOSED'}
@@ -270,6 +350,8 @@ classes = (
     SCRSHOT_PT_ui,
     SCRSHOT_PT_screenshot_manager,
     SCRSHOT_PT_screenshot_settings,
+    SCRSHOT_PT_screenshot_shading_settings,
+    SCRSHOT_PT_screenshot_export_settings,
     #SCRSHOT_PT_convert_ui
 )
 

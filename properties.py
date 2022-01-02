@@ -123,8 +123,8 @@ class SCRSHOT_collection_property(bpy.types.PropertyGroup):
         description='The camera object used for this screenshot item',
         update=match_screenshot_id
     )
-    cam_res_x: IntProperty(name='X', update=update_res_x)
-    cam_res_y: IntProperty(name='Y', update=update_res_y)
+    cam_res_x: IntProperty(name='X', update=update_res_x, default=1920)
+    cam_res_y: IntProperty(name='Y', update=update_res_y, default=1080)
     lock_res: BoolProperty(
         name='Lock Resolution',
         description='Sync both resolution sliders for square images',
@@ -147,17 +147,25 @@ class SCRSHOT_collection_property(bpy.types.PropertyGroup):
         update=change_lens_type
     )
 
+    # Export Properties
+    use_subfolder: BoolProperty(
+        name='Export to Subdir',
+        default=True,
+        description='Render this screenshot to a subfolder of the Export Path'
+    )
+    subfolder_name: StringProperty(name='Folder Name')
+
     # Render/Shading Properties
+    use_defaults: BoolProperty(
+        name='Use Defaults',
+        default=True,
+        description='Use the scene shading at the time of rendering for this screenshot'
+    )
     render_type: EnumProperty(
         items=(
             ('workbench', "Workbench", ""),
             ('eevee', "EEVEE", "")
         )
-    )
-    use_defaults: BoolProperty(
-        name='Use Defaults',
-        default=True,
-        description='Use the scene shading at the time of rendering for this screenshot'
     )
     lighting_type: EnumProperty(
         items=(
@@ -166,18 +174,63 @@ class SCRSHOT_collection_property(bpy.types.PropertyGroup):
             ('flat', "Flat", "")
         )
     )
+    studio_light_name: StringProperty(default='default')
+    matcap_light_name: StringProperty(default='basic_1.exr')
+    eevee_light_name: StringProperty(default='city.exr')
     use_wsl: BoolProperty(
         name='World Space Lighting',
         default=False,
         description='Make the light fixed and not follow the camera (Recommended for static shots)'
     )
     studio_rotate_z: FloatProperty(name='Rotation', min=-3.14159265359, max=3.14159265359, subtype='ANGLE')
-    use_subfolder: BoolProperty(
-        name='Export to Subfolder',
-        default=False,
-        description='Render this screenshot to a subfolder of the Export Path'
+    color_type: EnumProperty(
+        items=(
+            ('material', "Material", ""),
+            ('single', "Single", ""),
+            ('object', "Object", ""),
+            ('random', "Random", ""),
+            ('vertex', "Vertex", ""),
+            ('texture', "Texture", "")
+        )
     )
-    subfolder_name: StringProperty(name='Folder Name')
+    single_color_value: FloatVectorProperty(
+        name="Single Color Value",
+        subtype='COLOR_GAMMA',
+        default=[.8, .8, .8],
+        size=3,
+        min=0,
+        max=1
+    )
+    use_backface_culling: BoolProperty(
+        name='Backface Culling',
+        description='Use back face culling to hide the back side of faces'
+    )
+    use_cavity: BoolProperty(
+        name='Cavity',
+        description='Use cavity'
+    )
+    cavity_ridge: FloatProperty(min=0, max=2.5, subtype='FACTOR', default=0)
+    cavity_valley: FloatProperty(min=0, max=2.5, subtype='FACTOR', default=1)
+    curve_ridge: FloatProperty(min=0, max=2, subtype='FACTOR', default=1)
+    curve_valley: FloatProperty(min=0, max=2, subtype='FACTOR', default=0)
+    use_outline: BoolProperty(
+        name='Outline',
+        description='Render an outline around objects',
+        default=True
+    )
+    outliner_color_value: FloatVectorProperty(
+        name="Outline Color Value",
+        subtype='COLOR_GAMMA',
+        default=[0, 0, 0],
+        size=3,
+        min=0,
+        max=1
+    )
+    use_spec_lighting: BoolProperty(
+        name='Specular Lighting',
+        description='Render specular highlights',
+        default=True
+    )
 
 
 ##################################
