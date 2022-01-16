@@ -96,7 +96,7 @@ class SCRSHOT_PT_ui(PanelInfo, Panel):
         split.label(text='Format')
         split.prop(scrshot_saver, 'format_type', text='')
 
-        # EXR settings not necessary
+        # EXR not necessary
         if scrshot_saver.format_type == 'png':
             col.prop(image_settings, 'compression', text='Lossless Compression')
         elif scrshot_saver.format_type == 'jpeg':
@@ -198,6 +198,10 @@ class SCRSHOT_PT_screenshot_settings(PanelInfo, Panel):
 
             split = layout.split()
             split.prop(camera_data, 'display_size')
+
+            col = layout.column(align=True)
+            col.prop(active_scrshot, 'lens_flip_x', icon='CHECKBOX_HLT' if active_scrshot.lens_flip_x else 'CHECKBOX_DEHLT')
+            col.prop(active_scrshot, 'lens_flip_y', icon='CHECKBOX_HLT' if active_scrshot.lens_flip_y else 'CHECKBOX_DEHLT')
 
 
 class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):

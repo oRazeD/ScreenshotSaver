@@ -29,7 +29,7 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
         items=(
             ('png', "PNG", ""),
             ('jpeg', "JPEG", ""),
-            ('exr', "EXR", "")
+            ('open_exr', "EXR", "")
         )
     )
 
@@ -110,6 +110,11 @@ class SCRSHOT_collection_property(bpy.types.PropertyGroup):
         if self.camera_ob is not None:
             self.camera_ob.data.lens_unit = 'FOV' if self.lens_type == 'fov' else 'MILLIMETERS'
 
+    def change_lens_flip(self, context) -> None:
+        if self.camera_ob is not None:
+            self.camera_ob.scale[0] = -1 if self.lens_flip_x else 1
+            self.camera_ob.scale[1] = -1 if self.lens_flip_y else 1
+
     ### PROPERTIES ###
 
     # Core Properties
@@ -145,6 +150,16 @@ class SCRSHOT_collection_property(bpy.types.PropertyGroup):
         ),
         name='Lens Unit',
         update=change_lens_type
+    )
+    lens_flip_x: BoolProperty(
+        name='Flip Vertical',
+        description='Flip the camera horizontally',
+        update=change_lens_flip
+    )
+    lens_flip_y: BoolProperty(
+        name='Flip Horizontal',
+        description='Flip the camera vertically',
+        update=change_lens_flip
     )
 
     # Export Properties

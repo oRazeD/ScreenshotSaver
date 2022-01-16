@@ -31,6 +31,15 @@ def display_error_message(message='', title='Screenshot Saver Warning', icon='ER
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
 
+def disable_viewlayer_exclusion(context) -> None:
+    internal_coll = bpy.data.collections.get('ScrSaver Cameras (do not touch)')
+    if internal_coll.name in context.view_layer.layer_collection.children:
+        vlayer = context.view_layer.layer_collection.children.get(internal_coll.name)
+        
+        if vlayer is not None:
+            vlayer.exclude = False
+
+
 class OpInfo: # Mix-in class
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -133,29 +142,37 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         if self.switch_cam:
             bpy.ops.view3d.view_camera()
 
-    def load_user_sett(self, context, active_scrshot) -> None:
+    def handle_user_settings(self, context, active_scrshot) -> None:
         '''Load per screenshot settings such as file pathing, resolution and render setups'''
-        def handle_name_suffix(file_path) -> str:
+        def handle_path_formatting(file_path: str) -> str:
+            # Extend folder path if using subfolders
+            if active_scrshot.use_subfolder:
+                path_end = os.path.join(active_scrshot.subfolder_name, active_scrshot.name)
+            else:
+                path_end = active_scrshot.name
+            
+            file_path = os.path.join(file_path, path_end)
+
+            # Get the file extension type
+            if scene.screenshot_saver.format_type == 'open_exr':
+                file_format = 'exr'
+            else:
+                file_format = scene.screenshot_saver.format_type
+
+            # Format the path end with 4 digit suffix
             counter = 1
-            new_file_path = file_path + '_{:04d}'.format(counter)
-
-            while os.path.exists(new_file_path + '.' + context.scene.screenshot_saver.format_type):
+            file_path = file_path + '_{:04d}'.format(counter)
+            while os.path.exists(f'{file_path}.{file_format}'):
                 counter += 1
-                new_file_path = file_path + '_{:04d}'.format(counter)
+                file_path = file_path[:-5] + '_{:04d}'.format(counter)
 
-            return new_file_path
+            return f'{file_path}.{file_format}'
 
         scene = context.scene
         render = scene.render
         shading = self.space_data.shading
 
-        if active_scrshot.use_subfolder:
-            path_end = os.path.join(active_scrshot.subfolder_name, active_scrshot.name)
-        else:
-            path_end = active_scrshot.name
-
-        file_path = handle_name_suffix(os.path.join(bpy.path.abspath(scene.screenshot_saver.export_path), path_end))
-        render.filepath = file_path
+        render.filepath = handle_path_formatting(bpy.path.abspath(scene.screenshot_saver.export_path))
 
         scene.camera = active_scrshot.camera_ob
 
@@ -192,7 +209,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
             render.engine = 'BLENDER_EEVEE'
             shading.type = 'RENDERED'
 
-    def load_misc_sett(self, context) -> None:
+    def handle_misc_sett(self, context) -> None:
         '''Set a handful of render settings that are maintained across all screenshot renders'''
         scene = context.scene
         render = scene.render
@@ -226,16 +243,10 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         else:
             self.switch_cam = False
 
-        scrshot_saver = context.scene.screenshot_saver
+        image_settings.file_format = str(scene.screenshot_saver.format_type).upper()
+        if scene.screenshot_saver.format_type != 'jpeg':
+            image_settings.color_depth = '16'
 
-        if scrshot_saver.format_type == 'png':
-            image_settings.file_format = 'PNG'
-            image_settings.color_depth = '16'
-        elif scrshot_saver.format_type == 'jpeg':
-            image_settings.file_format = 'JPEG'
-        else: # EXR
-            image_settings.file_format = 'OPEN_EXR'
-            image_settings.color_depth = '16'
 
     def render_screenshot(self, context) -> int:
         '''A base for calling per screenshot setup methods and rendering each screenshot'''
@@ -246,21 +257,38 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
             rendered_screenshots = [scrshot for scrshot in scrshot_camera_coll if scrshot.enabled]
             for scrshot in rendered_screenshots:
                 # Load the user settings for this particular screenshot
-                self.load_user_sett(context, active_scrshot=scrshot)
+                self.handle_user_settings(context, active_scrshot=scrshot)
 
                 # Use opengl renders for both workbench and eevee (speed trumps quality here)
                 bpy.ops.render.opengl(write_still=True)
-
             return len(rendered_screenshots)
         else: # Single
             camera_index = context.scene.scrshot_camera_index
             active_scrshot = context.scene.scrshot_camera_coll[camera_index]
 
-            self.load_user_sett(context, active_scrshot)
+            self.handle_user_settings(context, active_scrshot)
 
             bpy.ops.render.opengl(write_still=True)
-
             return 1
+
+    def handle_render_vis(self, context) -> None:
+        '''TODO'''
+        def save_render_vis(context) -> None:
+            '''Saves a list of all current viewlayer render visibility'''
+            saved_render_vis = [ob.hide_render for ob in context.view_layer.objects]
+            saved_viewport_vis = [ob.hide_viewport for ob in context.view_layer.objects]
+
+        save_render_vis(context)
+
+        # Disable exclusion of internal collection
+        disable_viewlayer_exclusion(context)
+
+    def load_saved_render_vis(self, context) -> None:
+        ''''''
+        # Disable exclusion of internal collection
+        disable_viewlayer_exclusion(context)
+
+        # Save a list of all
 
     def execute(self, context):
         # Start counting execution time
@@ -268,11 +296,13 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
 
         self.get_space_data(context)
 
+        self.handle_render_vis(context)
+
         # Save current shading settings
         self.save_settings(context)
         
         # Load misc/generic settings that will apply to all rendered screenshots
-        self.load_misc_sett(context)
+        self.handle_misc_sett(context)
 
         # Prepare and render all screenshots
         render_count = self.render_screenshot(context)
@@ -326,6 +356,7 @@ class SCRSHOT_OT_add_screenshot_item(OpInfo, Operator):
         new_camera_ob.location = view_matrix_transl
         new_camera_ob.rotation_euler = view_matrix_rot
         new_camera_ob.screenshot_id = new_camera_ob.name
+        new_camera_ob.lock_scale[0] = new_camera_ob.lock_scale[1] = new_camera_ob.lock_scale[2] = True
         new_cam_data.screenshot_id = new_cam_data.name
         new_cam_data.passepartout_alpha = .9
         new_cam_data.lens = context.space_data.lens
