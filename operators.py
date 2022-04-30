@@ -484,6 +484,9 @@ class SCRSHOT_OT_select_and_preview(OpInfo, Operator):
             if context.space_data.region_3d.view_perspective != 'CAMERA':
                 bpy.ops.view3d.view_camera()
 
+        if (len(scene.scrshot_camera_coll)) > active_scrshot.id:
+            scene.scrshot_camera_index = active_scrshot.id
+
         # Deselect all objects
         for ob in context.selected_objects:
             ob.select_set(False)

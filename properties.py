@@ -152,12 +152,12 @@ class SCRSHOT_collection_property(bpy.types.PropertyGroup):
         update=change_lens_type
     )
     lens_flip_x: BoolProperty(
-        name='Flip Vertical',
+        name='Horizontal',
         description='Flip the camera horizontally',
         update=change_lens_flip
     )
     lens_flip_y: BoolProperty(
-        name='Flip Horizontal',
+        name='Vertical',
         description='Flip the camera vertically',
         update=change_lens_flip
     )

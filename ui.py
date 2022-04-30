@@ -41,7 +41,7 @@ class SCRSHOT_UL_items(bpy.types.UIList):
         sel_scrshot = row.operator(
             'scrshot.select_and_preview',
             text='',
-            icon='RESTRICT_SELECT_OFF',
+            icon='RESTRICT_SELECT_OFF' if context.object == item.camera_ob else 'RESTRICT_SELECT_ON',
             emboss=False
         )
         sel_scrshot.scrshot_name = item.name
@@ -193,15 +193,18 @@ class SCRSHOT_PT_screenshot_settings(PanelInfo, Panel):
                 split.label(text='Scale')
                 split.prop(camera_data, 'ortho_scale', text='')
 
-            split = layout.split()
-            split.prop(camera_data, 'passepartout_alpha')
-
-            split = layout.split()
-            split.prop(camera_data, 'display_size')
-
             col = layout.column(align=True)
-            col.prop(active_scrshot, 'lens_flip_x', icon='CHECKBOX_HLT' if active_scrshot.lens_flip_x else 'CHECKBOX_DEHLT')
-            col.prop(active_scrshot, 'lens_flip_y', icon='CHECKBOX_HLT' if active_scrshot.lens_flip_y else 'CHECKBOX_DEHLT')
+            col.prop(camera_data, 'passepartout_alpha')
+            col.prop(camera_data, 'display_size')
+
+            split = layout.split(factor=.3)
+            split.scale_y = .95
+            col1 = split.column()
+            col1.label(text='Flip Cam')
+
+            col2 = split.column(align=True)
+            col2.prop(active_scrshot, 'lens_flip_x', icon='CHECKBOX_HLT' if active_scrshot.lens_flip_x else 'CHECKBOX_DEHLT')
+            col2.prop(active_scrshot, 'lens_flip_y', icon='CHECKBOX_HLT' if active_scrshot.lens_flip_y else 'CHECKBOX_DEHLT')
 
 
 class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
