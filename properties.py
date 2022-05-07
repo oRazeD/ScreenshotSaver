@@ -30,7 +30,8 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
             ('png', "PNG", ""),
             ('jpeg', "JPEG", ""),
             ('open_exr', "EXR", "")
-        )
+        ),
+        name='Format Type'
     )
 
     record_on_save: BoolProperty(
@@ -43,6 +44,54 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
         name="Camera Visiblity",
         description='Toggle the viewport visibility of the cameras collection'
     )
+
+    render_frame: IntProperty(
+        name='Render Frame',
+        description="The frame to render all screenshots on",
+        default=0,
+        min=0
+    )
+
+    mp4_format_type: EnumProperty(
+        items=(
+            ('mp4', "MP4", ""),
+            ('gif', "GIF", "")
+        ),
+        name='Format Type'
+    )
+
+    mp4_framerate: IntProperty(
+        name='Framerate',
+        default=2,
+        min=0,
+        soft_max=24
+    )
+
+    mp4_res_downscale: EnumProperty(
+        items=(
+            ('full', "Full", ""),
+            ('1/2', "1/2", ""),
+            ('1/4', "1/4", "")
+        ),
+        name='Downres'
+    )
+
+    mp4_end_repeat_count: IntProperty(
+        name='End Repeat',
+        description='Decide how many times the end frame repeats',
+        default=0,
+        min=0,
+        soft_max=10
+    )
+
+    mp4_start_repeat_count: IntProperty(
+        name='Start Repeat',
+        description='Decide how many times the end frame repeats',
+        default=0,
+        min=0,
+        soft_max=10
+    )
+
 
 
 class SCRSHOT_collection_property(bpy.types.PropertyGroup):

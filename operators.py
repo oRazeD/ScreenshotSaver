@@ -1,9 +1,10 @@
-import bpy, os, json, time
+import bpy, os, json, time, subprocess
 from bpy.types import Operator
+from pathlib import Path
 
 import logging
 log = logging.getLogger(__name__)
-if "PYDEVD_USE_FRAME_EVAL" in os.environ: # If using the Python Dev add-on for blender, set config to debug
+if "PYDEVD_USE_FRAME_EVAL" in os.environ: # If using the Python Dev add-on for blender, set config to debug... works sometimes
     logging.basicConfig(level='DEBUG')
 
 
@@ -25,7 +26,7 @@ def poll_active_screenshot_item(context) -> bool:
 
 def display_error_message(message='', title='Screenshot Saver Warning', icon='ERROR') -> None:
     '''Display a custom error message in situations where a regular error message cannot be sent'''
-    def draw(self, context):
+    def draw(self):
         self.layout.label(text=message)
 
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
@@ -107,7 +108,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         # Use dir() to save every entry in the UI
         #
         # This will end up saving a lot of unnecessary data, but is very
-        # modular comparedto saving everything we need individually
+        # modular compared to saving everything we need individually
         self.saved_settings = {}
 
         for data in (shading, render, render.image_settings):
@@ -120,6 +121,8 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         # Manual dict values (only for when we need to cherry pick one or two values from each "group")
         self.saved_settings[overlay] = {'show_overlays': overlay.show_overlays}
         self.saved_settings[context.scene] = {'camera': context.scene.camera}
+        self.saved_settings[context.scene] = {'frame_current': context.scene.frame_current}
+
 
     def load_saved_settings(self, context) -> None:
         '''A "refresh" method that returns all changed attributes to their original values mostly recursively'''
@@ -147,24 +150,34 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         def handle_path_formatting(file_path: str) -> str:
             # Extend folder path if using subfolders
             if active_scrshot.use_subfolder:
-                path_end = os.path.join(active_scrshot.subfolder_name, active_scrshot.name)
+                path_end = Path(active_scrshot.subfolder_name, active_scrshot.name)
             else:
                 path_end = active_scrshot.name
             
-            file_path = os.path.join(file_path, path_end)
+            file_path = Path(file_path, path_end)
+            file_path.parent.mkdir(exist_ok=True)
 
             # Get the file extension type
             if scene.screenshot_saver.format_type == 'open_exr':
                 file_format = 'exr'
-            else:
+            else: # PNG, JPEG
                 file_format = scene.screenshot_saver.format_type
 
-            # Format the path end with 4 digit suffix
-            counter = 1
-            file_path = file_path + '_{:04d}'.format(counter)
-            while os.path.exists(f'{file_path}.{file_format}'):
-                counter += 1
-                file_path = file_path[:-5] + '_{:04d}'.format(counter)
+            file_numbers = []
+            for filename in os.listdir(file_path.parent):
+                try:
+                    if Path(file_path.parent, filename).is_file():
+                        file_numbers.append(int(filename.split('_')[-1].split(f'.{file_format}')[0]))
+                except ValueError:
+                    pass
+
+            # Set the counter & format the path end with 4 digit suffix
+            if not len(file_numbers):
+                counter = 1
+            else:
+                counter = max(file_numbers)+1
+
+            file_path = str(file_path) + '_{:04d}'.format(counter)
 
             return f'{file_path}.{file_format}'
 
@@ -210,11 +223,13 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
             shading.type = 'RENDERED'
 
     def handle_misc_sett(self, context) -> None:
-        '''Set a handful of render settings that are maintained across all screenshot renders'''
+        '''Set a handful of render/scene settings that are maintained across all screenshot renders'''
         scene = context.scene
         render = scene.render
         shading = self.space_data.shading
         image_settings = render.image_settings
+
+        scene.frame_current = scene.screenshot_saver.render_frame
 
         scene.display.viewport_aa = 'FXAA'
 
@@ -263,8 +278,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
                 bpy.ops.render.opengl(write_still=True)
             return len(rendered_screenshots)
         else: # Single
-            camera_index = context.scene.scrshot_camera_index
-            active_scrshot = context.scene.scrshot_camera_coll[camera_index]
+            active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
 
             self.handle_user_settings(context, active_scrshot)
 
@@ -460,8 +474,6 @@ class SCRSHOT_OT_select_and_preview(OpInfo, Operator):
     bl_label = "Select and Preview"
     bl_options = {'INTERNAL'}
 
-    # TODO Maybe autoselect the screenshot item as well?
-
     scrshot_name: bpy.props.StringProperty()
     preview_cam: bpy.props.BoolProperty(default=False)
 
@@ -531,16 +543,15 @@ class SCRSHOT_OT_copy_screenshot_settings(OpInfo, Operator):
 
         # Add-on root path & temp file path
         addon_path = os.path.dirname(__file__)
-        temps_path = os.path.join(addon_path, "temp")
 
-        if not os.path.exists(temps_path):
-            os.mkdir(temps_path)
+        temps_path = Path(addon_path, "temp")
+        temps_path.mkdir(exist_ok=True)
 
         # Serializing
         scrshot_copy_json = json.dumps(scrshot_copy_vars, indent=2)
 
         # Writing to file
-        with open(os.path.join(temps_path, "latest_screenshot_copy.json"), "w") as outfile:
+        with open(Path(temps_path, "latest_screenshot_copy.json"), "w") as outfile:
             outfile.write(scrshot_copy_json)
 
         self.report({'INFO'}, "Camera Settings Copied!")
@@ -589,7 +600,7 @@ class SCRSHOT_OT_paste_screenshot_settings(OpInfo, Operator):
 ### OUTLINER SETTINGS OPS ###
 
 
-class SCRSHOT_OT_copy_viewport_shade_settings(OpInfo, Operator): # TODO
+class SCRSHOT_OT_copy_viewport_shade_settings(OpInfo, Operator):
     """Get the viewport shading settings of the actively selected viewport"""
     bl_idname = "scrshot.copy_viewport_shade_settings"
     bl_label = "Clone 3D Viewport Shading"
@@ -690,7 +701,7 @@ class SCRSHOT_OT_sample_studio_light_rotation(OpInfo, Operator):
 
     def modal(self, context, event):
         if event.type == 'MOUSEMOVE':
-            offset = event.mouse_x - (event.mouse_prev_x)
+            offset = event.mouse_x - event.mouse_prev_x
             self.shading.studiolight_rotate_z += offset * 0.0075
 
             if self.shading.studiolight_rotate_z <= -3.141592:
@@ -703,7 +714,7 @@ class SCRSHOT_OT_sample_studio_light_rotation(OpInfo, Operator):
 
             context.area.header_text_set(f"Light Rotation Sample: {round(studiolight_rotate_z_degree)}")
 
-        elif event.type == 'LEFTMOUSE':
+        if event.type == 'LEFTMOUSE':
             context.window.cursor_set('DEFAULT')
             context.area.header_text_set(None)
 
@@ -715,43 +726,196 @@ class SCRSHOT_OT_sample_studio_light_rotation(OpInfo, Operator):
             context.window.cursor_set('DEFAULT')
             context.area.header_text_set(None)
 
-            self.active_scrshot.studio_rotate_z = self.initial_item_rotate_z
+            self.active_scrshot.studio_rotate_z = self.saved_item_rotate_z
 
             self.execute(context)
             return {'CANCELLED'}
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        self.shading.type = self.initial_type
-        self.shading.light = self.initial_light
-        self.shading.use_world_space_lighting = self.initial_use_wsl
-        self.shading.studiolight_rotate_z = self.initial_studio_rot_z
+        self.shading.type = self.saved_type
+        self.shading.light = self.saved_light
+        self.shading.use_world_space_lighting = self.saved_use_wsl
+        self.shading.studiolight_rotate_z = self.saved_studiolight_rot_z
         return {'FINISHED'}
 
     def invoke(self, context, event):
-        space_data = context.space_data
-        self.shading = space_data.shading
+        self.shading = context.space_data.shading
 
-        self.initial_type = self.shading.type
-        self.initial_light = self.shading.light
-        self.initial_use_wsl = self.shading.use_world_space_lighting
-        self.initial_studio_rot_z = self.shading.studiolight_rotate_z
+        self.active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
+
+        self.saved_type = self.shading.type
+        self.saved_light = self.shading.light
+        self.saved_use_wsl = self.shading.use_world_space_lighting
+
+        self.saved_item_rotate_z = self.active_scrshot.studio_rotate_z
+        self.saved_studiolight_rot_z = self.shading.studiolight_rotate_z
+
+        if self.active_scrshot.studio_rotate_z != 0:
+            self.shading.studiolight_rotate_z = self.active_scrshot.studio_rotate_z
+        else:
+            self.active_scrshot.studio_rotate_z = self.shading.studiolight_rotate_z
 
         self.shading.type = 'SOLID'
         self.shading.light = 'STUDIO'
         self.shading.use_world_space_lighting = True
 
-        self.initial_mouse_x = event.mouse_x
-
-        camera_index = context.scene.scrshot_camera_index
-        self.active_scrshot = context.scene.scrshot_camera_coll[camera_index]
-
-        self.initial_item_rotate_z = self.active_scrshot.studio_rotate_z
-
         context.window.cursor_set('MOVE_X')
-        context.area.header_text_set(f"Light Rotation Sample: {round(self.initial_studio_rot_z)}")
+        context.area.header_text_set(f"Light Rotation Sample: {round(self.active_scrshot.studio_rotate_z)}")
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}
+
+
+class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
+    """Generate an MP4 of the selected active screenshot"""
+    bl_idname = "scrshot.generate_mp4"
+    bl_label = "Generate MP4"
+
+    def generate_palette(self, concat_file_path) -> str:
+        '''Generate a color palette from a given image sequence'''
+        palette_file_path = Path(Path(os.path.abspath(__file__)).parent, "temp", "palette.png")
+
+        # Create args
+        call_args = [
+            f'{Path(Path(os.path.abspath(__file__)).parent, "ffmpeg", "bin", "ffmpeg.exe")}',
+            '-y',
+            '-f', 'concat', '-safe', '0',
+            '-i', f'{concat_file_path}',
+            '-vf', 'palettegen=reserve_transparent=1:transparency_color=000000',
+            f'{palette_file_path}'
+        ]
+
+        subprocess.call(call_args)
+        return palette_file_path
+
+    def generate_text_file(self, file_format) -> str:
+        render_files = []
+        for filename in sorted(os.listdir(self.input_path.parent)):
+            if filename.startswith(self.input_path.stem + '_') and filename.endswith(file_format):
+                render_files.append(filename)
+
+        temp_path = Path(Path(os.path.abspath(__file__)).parent, "temp")
+        temp_path.mkdir(exist_ok=True)
+        concat_file_path = Path(temp_path, 'concat.txt')
+        with open(concat_file_path, 'w') as f:
+            for idx, file_path in enumerate(render_files):
+                if idx == 0: # If start repeat has been set, add the first iterable in render_files to the txt file x amount of times
+                    for _ in range(bpy.context.scene.screenshot_saver.mp4_start_repeat_count):
+                        f.write(f"file '{Path(self.input_path.parent, file_path)}'\nduration 1\n")
+
+                f.write(f"file '{Path(self.input_path.parent, file_path)}'\nduration 1\n") # Add duration to get rid of warnings
+
+            # If end repeat has been set, add the final iterable in render_files to the txt file x amount of times
+            for _ in range(bpy.context.scene.screenshot_saver.mp4_end_repeat_count):
+                f.write(f"file '{Path(self.input_path.parent, file_path)}'\nduration 1\n")
+        return concat_file_path
+
+    def handle_path_formatting_mp4(self) -> Path:
+        scrshot_saver = bpy.context.scene.screenshot_saver
+
+        file_numbers = []
+        for filename in os.listdir(self.input_path.parent):
+            try:
+                if Path(self.input_path.parent, filename).is_file():
+                    file_numbers.append(int(filename.split('_')[-1].split(f'.{scrshot_saver.mp4_format_type}')[0]))
+            except ValueError:
+                pass
+
+        # Set the counter & format the path end with 4 digit suffix
+        if not len(file_numbers):
+            counter = 1
+        else:
+            counter = max(file_numbers)+1
+
+        file_path = str(self.input_path) + '_{:04d}'.format(counter)
+
+        return Path(f'{file_path}.{scrshot_saver.mp4_format_type}')
+
+    def execute(self, context):
+        scrshot_saver = context.scene.screenshot_saver
+        active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
+
+        if (active_scrshot.cam_res_x % 2) or (active_scrshot.cam_res_y % 2):
+            self.report({'ERROR'}, 'The selected screenshots resolution is not divisible by 2.\n\nYou will need to delete all "bad" screenshots and re-render to generate an MP4.')
+            return{'CANCELLED'}
+
+        # Set input path
+        if active_scrshot.use_subfolder:
+            path_end = Path(active_scrshot.subfolder_name, active_scrshot.name)
+        else:
+            path_end = active_scrshot.name
+
+        self.input_path = Path(scrshot_saver.export_path, path_end)
+
+        if not self.input_path.parent.is_dir():
+            self.report({'ERROR'}, 'The render directory does not exist')
+            return{'CANCELLED'}
+
+        files_list = [file_name for file_name in os.listdir(self.input_path.parent) if Path(self.input_path.parent, file_name).is_file()]
+        if not len(files_list):
+            self.report({'ERROR'}, 'There are no files in this directory')
+            return{'CANCELLED'}
+
+        # Get the file extension type
+        if scrshot_saver.format_type == 'open_exr':
+            file_format = 'exr'
+            gamma_fac = 2.2
+        else: # PNG, JPEG
+            file_format = scrshot_saver.format_type
+            gamma_fac = 1
+
+        # Get the downscaling amount
+        if scrshot_saver.mp4_res_downscale == 'full':
+            scale_fac = 1
+        elif scrshot_saver.mp4_res_downscale == '1/2':
+            scale_fac = 2
+        else: # 1/4
+            scale_fac = 4
+
+        # Generate an ordered list of the frames to render
+        concat_file_path = self.generate_text_file(file_format)
+
+        output_path = self.handle_path_formatting_mp4()
+
+        ffmpeg_path = Path(Path(os.path.abspath(__file__)).parent, "ffmpeg", "bin", "ffmpeg.exe")
+
+        # Create args
+        if scrshot_saver.mp4_format_type == 'mp4':
+            call_args = [
+                f'{ffmpeg_path}',
+                '-y',
+                #'-framerate', f'{scrshot_saver.mp4_framerate}',
+                '-f', 'concat', '-safe', '0',
+                '-r', f'{scrshot_saver.mp4_framerate}',
+                '-i', f'{concat_file_path}',
+                #'-i', f'{self.input_path}_%04d.{file_format}',
+                "-c:v", 'libx264',
+                '-preset', 'slow',
+                '-crf', '20',
+                '-pix_fmt', 'yuv420p',
+                '-vf', f'eq=gamma={gamma_fac}',
+                f'{output_path}'
+            ]
+        else: # GIF
+            palette_file_path = self.generate_palette(concat_file_path)
+
+            call_args = [
+                f'{ffmpeg_path}',
+                '-y',
+                '-f', 'concat', '-safe', '0',
+                '-i', f'{concat_file_path}',
+                '-i', f'{palette_file_path}',
+                '-filter_complex', f"[0:v]eq=gamma={gamma_fac}[z];[z]scale=-1:{active_scrshot.cam_res_y/scale_fac}[z];[z][1:v]paletteuse=dither=bayer:bayer_scale=4",
+                f'{output_path}'
+            ]
+
+        subprocess.call(call_args)
+
+        if output_path.is_file():
+            self.report({'INFO'}, "MP4 Generated!")
+        else:
+            self.report({'ERROR'}, "Something went wrong, and a file was not generated.\n\nPlease send a screenshot of your console to the dev.")
+        return {'FINISHED'}
 
 
 ################################################################################################################
@@ -769,7 +933,8 @@ classes = (
     SCRSHOT_OT_paste_screenshot_settings,
     SCRSHOT_OT_copy_viewport_shade_settings,
     SCRSHOT_OT_get_studio_light,
-    SCRSHOT_OT_sample_studio_light_rotation
+    SCRSHOT_OT_sample_studio_light_rotation,
+    SCRSHOT_OT_generate_mp4
 )
 
 def register():

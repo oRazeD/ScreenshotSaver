@@ -102,6 +102,12 @@ class SCRSHOT_PT_ui(PanelInfo, Panel):
         elif scrshot_saver.format_type == 'jpeg':
             col.prop(image_settings, 'quality')
 
+        col = box.column()
+
+        split = col.split(factor=.35)
+        split.label(text='Frame')
+        split.prop(scrshot_saver, 'render_frame', text='')
+
 
 class SCRSHOT_PT_screenshot_manager(PanelInfo, Panel):
     bl_label = 'Screenshot Manager'
@@ -174,6 +180,11 @@ class SCRSHOT_PT_screenshot_settings(PanelInfo, Panel):
             row.prop(active_scrshot, 'cam_res_y', text='')
             row.prop(active_scrshot, 'lock_res', text='', icon='LOCKED' if active_scrshot.lock_res else 'UNLOCKED')
 
+            if (active_scrshot.cam_res_x % 2) or (active_scrshot.cam_res_y % 2):
+                split = layout.split(factor=.3, align=True)
+                split.label(text='')
+                split.label(text='Res not divisible by 2!', icon='INFO')
+
             split = layout.split(factor=.3)
             split.label(text='Type')
             split.prop(active_scrshot, 'cam_type', text='')
@@ -193,18 +204,18 @@ class SCRSHOT_PT_screenshot_settings(PanelInfo, Panel):
                 split.label(text='Scale')
                 split.prop(camera_data, 'ortho_scale', text='')
 
-            col = layout.column(align=True)
-            col.prop(camera_data, 'passepartout_alpha')
-            col.prop(camera_data, 'display_size')
-
             split = layout.split(factor=.3)
             split.scale_y = .95
             col1 = split.column()
-            col1.label(text='Flip Cam')
+            col1.label(text='Flip')
 
             col2 = split.column(align=True)
             col2.prop(active_scrshot, 'lens_flip_x', icon='CHECKBOX_HLT' if active_scrshot.lens_flip_x else 'CHECKBOX_DEHLT')
             col2.prop(active_scrshot, 'lens_flip_y', icon='CHECKBOX_HLT' if active_scrshot.lens_flip_y else 'CHECKBOX_DEHLT')
+
+            col = layout.column(align=True)
+            col.prop(camera_data, 'passepartout_alpha')
+            col.prop(camera_data, 'display_size')
 
 
 class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
@@ -232,8 +243,10 @@ class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
         split.label(text='')
         split.prop(active_scrshot, 'use_defaults')
 
+        if active_scrshot.use_defaults:
+            return
+
         col_shading = box.column(align=True)
-        col_shading.enabled = not active_scrshot.use_defaults
 
         if active_scrshot.render_type == 'workbench':
             row_shad = col_shading.row(align=True)
@@ -321,7 +334,6 @@ class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
 class SCRSHOT_PT_screenshot_export_settings(PanelInfo, Panel):
     bl_label = 'Export'
     bl_parent_id = "SCRSHOT_PT_screenshot_settings"
-    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         active_scrshot = get_active_scrshot()
@@ -340,11 +352,33 @@ class SCRSHOT_PT_screenshot_export_settings(PanelInfo, Panel):
 
 class SCRSHOT_PT_convert_ui(PanelInfo, Panel):
     bl_label = 'Convert Media'
-    bl_parent_id = "SCRSHOT_PT_ui"
+    bl_parent_id = "SCRSHOT_PT_screenshot_settings"
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
+
+        scrshot_saver = context.scene.screenshot_saver
+
+        col = layout.column(align=True)
+        col.scale_y = 1.5
+        col.operator("scrshot.generate_mp4", text=f'Generate {scrshot_saver.mp4_format_type.upper()}')
+
+        row = col.row(align=True)
+        row.scale_y = .7
+        row.prop(scrshot_saver, 'mp4_format_type', expand=True)
+
+        layout.prop(scrshot_saver, 'mp4_framerate')
+
+        if scrshot_saver.mp4_format_type == 'gif':
+            split = layout.split(align=True, factor=.3)
+            split.label(text='Downres')
+            split.prop(scrshot_saver, 'mp4_res_downscale', text='')
+
+        split = layout.split(align=True, factor=.3)
+        split.label(text='Repeat')
+        split.prop(scrshot_saver, 'mp4_start_repeat_count', text='Start')
+        split.prop(scrshot_saver, 'mp4_end_repeat_count', text='End')
 
 
 ################################################################################################################
@@ -359,7 +393,7 @@ classes = (
     SCRSHOT_PT_screenshot_settings,
     SCRSHOT_PT_screenshot_shading_settings,
     SCRSHOT_PT_screenshot_export_settings,
-    #SCRSHOT_PT_convert_ui
+    SCRSHOT_PT_convert_ui
 )
 
 def register():
