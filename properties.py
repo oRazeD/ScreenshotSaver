@@ -69,11 +69,12 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
 
     mp4_res_downscale: EnumProperty(
         items=(
-            ('full', "Full", ""),
-            ('1/2', "1/2", ""),
-            ('1/4', "1/4", "")
+            ('1', "Full", ""),
+            ('2', "1/2", ""),
+            ('4', "1/4", "")
         ),
-        name='Downres'
+        name='Downres',
+        description='Downscale the video output for smaller file sizes'
     )
 
     mp4_end_repeat_count: IntProperty(
@@ -86,7 +87,7 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
 
     mp4_start_repeat_count: IntProperty(
         name='Start Repeat',
-        description='Decide how many times the end frame repeats',
+        description='Decide how many times the start frame repeats',
         default=0,
         min=0,
         soft_max=10

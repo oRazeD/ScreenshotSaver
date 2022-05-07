@@ -767,7 +767,7 @@ class SCRSHOT_OT_sample_studio_light_rotation(OpInfo, Operator):
 
 
 class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
-    """Generate an MP4 of the selected active screenshot"""
+    """Generate an MP4 or GIF of the selected active screenshot"""
     bl_idname = "scrshot.generate_mp4"
     bl_label = "Generate MP4"
 
@@ -785,10 +785,15 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
             f'{palette_file_path}'
         ]
 
+        if bpy.context.scene.screenshot_saver.format_type == 'open_exr':
+            call_args.insert(2, '-apply_trc')
+            call_args.insert(3, 'iec61966_2_1')
+
         subprocess.call(call_args)
         return palette_file_path
 
     def generate_text_file(self, file_format) -> str:
+        '''Generate a text file that outlines the image sequences order and length'''
         render_files = []
         for filename in sorted(os.listdir(self.input_path.parent)):
             if filename.startswith(self.input_path.stem + '_') and filename.endswith(file_format):
@@ -811,6 +816,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
         return concat_file_path
 
     def handle_path_formatting_mp4(self) -> Path:
+        '''Handle output file formatting'''
         scrshot_saver = bpy.context.scene.screenshot_saver
 
         file_numbers = []
@@ -847,6 +853,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
 
         self.input_path = Path(scrshot_saver.export_path, path_end)
 
+        # Verify directory and file existence
         if not self.input_path.parent.is_dir():
             self.report({'ERROR'}, 'The render directory does not exist')
             return{'CANCELLED'}
@@ -859,24 +866,16 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
         # Get the file extension type
         if scrshot_saver.format_type == 'open_exr':
             file_format = 'exr'
-            gamma_fac = 2.2
         else: # PNG, JPEG
             file_format = scrshot_saver.format_type
-            gamma_fac = 1
-
-        # Get the downscaling amount
-        if scrshot_saver.mp4_res_downscale == 'full':
-            scale_fac = 1
-        elif scrshot_saver.mp4_res_downscale == '1/2':
-            scale_fac = 2
-        else: # 1/4
-            scale_fac = 4
 
         # Generate an ordered list of the frames to render
         concat_file_path = self.generate_text_file(file_format)
 
+        # Handle file path formatting/versioning
         output_path = self.handle_path_formatting_mp4()
 
+        # Get the path of the local ffmpeg lib
         ffmpeg_path = Path(Path(os.path.abspath(__file__)).parent, "ffmpeg", "bin", "ffmpeg.exe")
 
         # Create args
@@ -884,16 +883,13 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
             call_args = [
                 f'{ffmpeg_path}',
                 '-y',
-                #'-framerate', f'{scrshot_saver.mp4_framerate}',
                 '-f', 'concat', '-safe', '0',
                 '-r', f'{scrshot_saver.mp4_framerate}',
                 '-i', f'{concat_file_path}',
-                #'-i', f'{self.input_path}_%04d.{file_format}',
                 "-c:v", 'libx264',
                 '-preset', 'slow',
                 '-crf', '20',
                 '-pix_fmt', 'yuv420p',
-                '-vf', f'eq=gamma={gamma_fac}',
                 f'{output_path}'
             ]
         else: # GIF
@@ -903,11 +899,16 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
                 f'{ffmpeg_path}',
                 '-y',
                 '-f', 'concat', '-safe', '0',
+                '-r', f'{scrshot_saver.mp4_framerate}',
                 '-i', f'{concat_file_path}',
                 '-i', f'{palette_file_path}',
-                '-filter_complex', f"[0:v]eq=gamma={gamma_fac}[z];[z]scale=-1:{active_scrshot.cam_res_y/scale_fac}[z];[z][1:v]paletteuse=dither=bayer:bayer_scale=4",
+                '-filter_complex', f"[0:v]scale=-1:{active_scrshot.cam_res_y/int(scrshot_saver.mp4_res_downscale)}[z];[z][1:v]paletteuse=dither=bayer:bayer_scale=4",
                 f'{output_path}'
             ]
+
+        if scrshot_saver.format_type == 'open_exr':
+            call_args.insert(2, '-apply_trc')
+            call_args.insert(3, 'iec61966_2_1')
 
         subprocess.call(call_args)
 
