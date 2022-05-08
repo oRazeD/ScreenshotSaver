@@ -1,6 +1,8 @@
-# ScreenshotSaver Introduction
+![scrshot_saver_plus](https://user-images.githubusercontent.com/31065180/167279166-4a026a6e-74ef-49c0-9a83-229be63b821c.png)
 
-ScreenshotSaver is a Blender tool for easily rendering screenshots of your WIPs without much manual setup. 
+
+# ScreenshotSaver Introduction
+ScreenshotSaver is a Blender tool for easily rendering screenshots of your WIPs without the manual setup hassle. 
 
 
 # Feature Set
