@@ -702,7 +702,7 @@ class SCRSHOT_OT_sample_studio_light_rotation(OpInfo, Operator):
     def modal(self, context, event):
         if event.type == 'MOUSEMOVE':
             offset = event.mouse_x - event.mouse_prev_x
-            self.shading.studiolight_rotate_z += offset * 0.0075
+            self.shading.studiolight_rotate_z += offset * .0075
 
             if self.shading.studiolight_rotate_z <= -3.141592:
                 self.shading.studiolight_rotate_z = 3.141592
@@ -781,7 +781,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
             '-y',
             '-f', 'concat', '-safe', '0',
             '-i', f'{concat_file_path}',
-            '-vf', 'palettegen=reserve_transparent=1:transparency_color=000000',
+            '-vf', 'palettegen=reserve_transparent=1:transparency_color=000000:stats_mode=diff',
             f'{palette_file_path}'
         ]
 
@@ -902,7 +902,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
                 '-r', f'{scrshot_saver.mp4_framerate}',
                 '-i', f'{concat_file_path}',
                 '-i', f'{palette_file_path}',
-                '-filter_complex', f"[0:v]scale=-1:{active_scrshot.cam_res_y/int(scrshot_saver.mp4_res_downscale)}[z];[z][1:v]paletteuse=dither=bayer:bayer_scale=4",
+                '-filter_complex', f"[0:v]scale=-1:{active_scrshot.cam_res_y/int(scrshot_saver.mp4_res_downscale)}[z];[z][1:v]paletteuse", #=dither=bayer:bayer_scale=4
                 f'{output_path}'
             ]
 
@@ -913,7 +913,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
         subprocess.call(call_args)
 
         if output_path.is_file():
-            self.report({'INFO'}, "MP4 Generated!")
+            self.report({'INFO'}, f"{scrshot_saver.mp4_format_type.upper()} Generated!")
         else:
             self.report({'ERROR'}, "Something went wrong, and a file was not generated.\n\nPlease send a screenshot of your console to the dev.")
         return {'FINISHED'}
