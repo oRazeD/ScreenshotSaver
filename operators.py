@@ -88,6 +88,26 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
             and os.path.exists(bpy.path.abspath(context.scene.screenshot_saver.export_path))
         )
 
+    def get_set_hidden_objects(self, context) -> dict:
+        '''Generate a dict of all objects and collections that will be hidden for the viewport render and hide them'''
+        # TODO Does isolate toggle operator not work when taking screenshots?
+        hidden_obs = {ob:(ob.hide_render, ob.hide_viewport) for ob in context.view_layer.objects} #  if ob.hide_render
+        hidden_colls = {coll:(coll.hide_render, coll.hide_viewport) for coll in bpy.data.collections}  # if coll.hide_render
+
+        for ob, vis in hidden_obs.items():
+            if vis[0]:
+                ob.hide_viewport = True
+            else:
+                ob.hide_viewport = False
+
+        for coll, vis in hidden_colls.items():
+            if vis[0]:
+                coll.hide_viewport = True
+            else:
+                coll.hide_viewport = False
+
+        return hidden_obs, hidden_colls
+
     def get_space_data(self, context) -> None:
         '''Gets the active space data based on where the cursor is located and handles poor contexts'''
         if context.area.type != 'VIEW_3D':
@@ -124,7 +144,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         self.saved_settings[context.scene] = {'frame_current': context.scene.frame_current}
 
 
-    def load_saved_settings(self, context) -> None:
+    def load_saved_settings(self, context, hidden_obs, hidden_colls) -> None:
         '''A "refresh" method that returns all changed attributes to their original values mostly recursively'''
         # Original UI
         if self.saved_area_type is not None:
@@ -140,6 +160,19 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
                     pass
                 except TypeError: # This seems to only happen with color depth (bad context), keep debug log for future exceptions
                     log.debug(f'{name}: {value} had a TypeError, this should be normal.')
+
+        # Unhide objects/collections hidden in the viewport
+        for ob, vis in hidden_obs.items():
+            if not vis[1]:
+                ob.hide_viewport = False
+            else:
+                ob.hide_viewport = True
+
+        for coll, vis in hidden_colls.items():
+            if not vis[1]:
+                coll.hide_viewport = False
+            else:
+                coll.hide_viewport = True
 
         # Original camera view
         if self.switch_cam:
@@ -250,8 +283,6 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         render.use_overwrite = True
         render.use_placeholder = False
 
-        # TODO Does isolate toggle operator not work when taking screenshots?
-
         if context.space_data.region_3d.view_perspective != 'CAMERA':
             self.switch_cam = True
             bpy.ops.view3d.view_camera()
@@ -285,32 +316,13 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
             bpy.ops.render.opengl(write_still=True)
             return 1
 
-    def handle_render_vis(self, context) -> None:
-        '''TODO'''
-        def save_render_vis(context) -> None:
-            '''Saves a list of all current viewlayer render visibility'''
-            saved_render_vis = [ob.hide_render for ob in context.view_layer.objects]
-            saved_viewport_vis = [ob.hide_viewport for ob in context.view_layer.objects]
-
-        save_render_vis(context)
-
-        # Disable exclusion of internal collection
-        disable_viewlayer_exclusion(context)
-
-    def load_saved_render_vis(self, context) -> None:
-        ''''''
-        # Disable exclusion of internal collection
-        disable_viewlayer_exclusion(context)
-
-        # Save a list of all
-
     def execute(self, context):
         # Start counting execution time
         start = time.time()
 
         self.get_space_data(context)
 
-        self.handle_render_vis(context)
+        hidden_obs, hidden_colls = self.get_set_hidden_objects(context)
 
         # Save current shading settings
         self.save_settings(context)
@@ -321,8 +333,8 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         # Prepare and render all screenshots
         render_count = self.render_screenshot(context)
 
-        # Reload original shading settings
-        self.load_saved_settings(context)
+        # Reload original shading/render vis settings
+        self.load_saved_settings(context, hidden_obs, hidden_colls)
 
         # This is only scene when rendering manually, will get overwritten by standard saving message
         self.report({'INFO'}, f"{render_count} Screenshot(s) Rendered!")
