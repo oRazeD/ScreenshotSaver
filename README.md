@@ -1,4 +1,4 @@
-![scrshot_saver_plus](https://user-images.githubusercontent.com/31065180/167279166-4a026a6e-74ef-49c0-9a83-229be63b821c.png)
+![scrshot_saver_plus](https://user-images.githubusercontent.com/31065180/167504126-4ea81863-f93c-4481-9f52-a67bce1ac62e.png)
 
 
 # ScreenshotSaver Introduction
