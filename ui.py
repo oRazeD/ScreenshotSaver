@@ -64,18 +64,22 @@ class SCRSHOT_PT_ui(PanelInfo, Panel):
         col = layout.column(align=True)
 
         row = col.row(align=True)
-        row.scale_y = 1.75
+        row.scale_y = 1.5
         row.enabled = correct_export_path
         row.prop(
             scrshot_saver,
             'record_on_save',
             text='Disable Render on Save' if scrshot_saver.record_on_save else 'Enable Render on Save',
             icon='RADIOBUT_ON' if scrshot_saver.record_on_save else 'RADIOBUT_OFF'
-            )
+        )
 
-        row = col.row(align=True)
-        row.scale_y = 1.25
-        row.operator('scrshot.render_screenshots', text='Render All Screenshots', icon='RENDER_STILL').render_type = 'enabled'
+        col.separator()
+
+        col2 = col.column(align=True)
+        col2.scale_y = 1.25
+        col2.operator('scrshot.render_screenshots', text='Render All Screenshots', icon='RENDER_STILL').render_type = 'enabled'
+        
+        col.operator('scrshot.render_screenshots', text='Render Single Screenshot').render_type = 'single'
 
         box = col.box()
         split = box.split(factor=.35)
@@ -115,38 +119,35 @@ class SCRSHOT_PT_screenshot_manager(PanelInfo, Panel):
 
     def draw(self, context):
         layout = self.layout
-
-        col = layout.column(align=True)
-        col.scale_y = 1.25
-        col.operator('scrshot.render_screenshots', text='Render Single Screenshot', icon='RENDER_STILL').render_type = 'single'
-        
-        col = layout.column(align=True)
-        col.prop(
-            context.space_data,
-            'lock_camera',
-            text='Lock Camera to View',
-            icon='LOCKVIEW_ON' if context.space_data.lock_camera else 'LOCKVIEW_OFF'
-            )
+        layout.operator("scrshot.add_screenshot_item", text='Add New Screenshot', icon='ADD')
 
         row = layout.row()
 
         col1 = row.column(align=True)
         col1.template_list("SCRSHOT_UL_items", "", context.scene, "scrshot_camera_coll", context.scene, "scrshot_camera_index", rows=4)
 
-        col2 = row.column(align=True)
-        col2.operator("scrshot.add_screenshot_item", text='', icon='ADD')
-        col2.operator("scrshot.delete_screenshot_item", text='', icon='REMOVE')
+        col2 = row.column()
+        col2.prop(
+            context.space_data,
+            'lock_camera',
+            text='',
+            icon='LOCKVIEW_ON' if context.space_data.lock_camera else 'LOCKVIEW_OFF'
+        )
 
-        col2.separator(factor=3)
+        col2.separator(factor=1.25)
+
+        col2.operator("scrshot.delete_screenshot_item", text='', icon='TRASH')
+
+        col2.separator(factor=1.25)
 
         col3 = col2.column(align=True)
         col3.operator("scrshot.copy_screenshot_settings", text='', icon='COPYDOWN')
         col3.operator("scrshot.paste_screenshot_settings", text='', icon='PASTEDOWN')
 
         if not len(context.scene.scrshot_camera_coll):
-            box = layout.box()
-            box.label(text='Add a new screenshot', icon='INFO')
-            box.label(text='item to get started!', icon='BLANK1')
+            box_col = layout.box().column(align=True)
+            box_col.label(text='Add a new screenshot', icon='INFO')
+            box_col.label(text='item to get started!', icon='BLANK1')
 
 
 class SCRSHOT_PT_screenshot_settings(PanelInfo, Panel):
@@ -227,25 +228,24 @@ class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
 
         layout = self.layout
 
+        split = layout.split(factor=.35)
+        split.label(text='')
+        split.prop(active_scrshot, 'use_defaults', text='Use Default Shading')
+
         col = layout.column(align=True)
 
         row = col.row(align=True)
-        row.scale_y = 1.25
+        row.scale_y = 1.3
         row.prop(active_scrshot, 'render_type', expand=True)
+
+        if active_scrshot.use_defaults:
+            return
 
         row = col.row(align=True)
         row.scale_y = 1.1
         row.operator("scrshot.copy_viewport_shade_settings", icon='COPYDOWN')
 
         box = col.box()
-
-        split = box.split(factor=.35)
-        split.label(text='')
-        split.prop(active_scrshot, 'use_defaults')
-
-        if active_scrshot.use_defaults:
-            return
-
         col_shading = box.column(align=True)
 
         if active_scrshot.render_type == 'workbench':
@@ -266,7 +266,6 @@ class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
 
             if active_scrshot.lighting_type == 'studio':
                 split = col_shading.split(factor=.15)
-
                 split.prop(active_scrshot, 'use_wsl', text='', icon='WORLD')
 
                 row = split.row(align=True)
@@ -275,9 +274,7 @@ class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
                 row.prop(active_scrshot, 'studio_rotate_z')
 
             col_shading.separator(factor=1.5)
-
-            col_flow = col_shading.column_flow(columns=3, align=True)
-            col_flow.prop(active_scrshot, 'color_type', expand=True)
+            col_shading.column_flow(columns=3, align=True).prop(active_scrshot, 'color_type', expand=True)
 
             if active_scrshot.color_type == 'single':
                 col = col_shading.column(align=True)
@@ -287,8 +284,7 @@ class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
             col = col_shading.column()
             col.separator()
 
-            box = col.box()
-            box.prop(active_scrshot, 'use_backface_culling')
+            col.box().prop(active_scrshot, 'use_backface_culling')
 
             col = col_shading.column()
             col.separator(factor=.25)
@@ -314,8 +310,7 @@ class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
             col = col_shading.column()
             col.separator(factor=.25)
 
-            box = col.box()
-            split = box.split()
+            split = col.box().split()
             split.prop(active_scrshot, 'use_outline')
 
             if active_scrshot.use_outline:
@@ -325,8 +320,7 @@ class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
                 col = col_shading.column()
                 col.separator(factor=.25)
 
-                box = col.box()
-                box.prop(active_scrshot, 'use_spec_lighting')
+                col.box().prop(active_scrshot, 'use_spec_lighting')
         else: # EEVEE
             pass
 

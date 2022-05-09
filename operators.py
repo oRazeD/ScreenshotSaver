@@ -70,7 +70,7 @@ class SCRSHOT_OT_open_folder(OpInfo, Operator):
 class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
     """The core operator for taking and rendering screenshots"""
     bl_idname = "scrshot.render_screenshots"
-    bl_label = "Render Screenshots"
+    bl_label = "Render All Screenshots"
 
     render_type: bpy.props.EnumProperty(
         items=(
@@ -514,6 +514,7 @@ class SCRSHOT_OT_copy_screenshot_settings(OpInfo, Operator):
     """Copy the active screenshots settings, to be pasted on other screenshots"""
     bl_idname = "scrshot.copy_screenshot_settings"
     bl_label = "Copy Screenshot Settings"
+    bl_options = {'INTERNAL'}
 
     @classmethod
     def poll(cls, context):
@@ -562,6 +563,7 @@ class SCRSHOT_OT_paste_screenshot_settings(OpInfo, Operator):
     """Paste the latest copied screenshots settings onto the active screenshot item"""
     bl_idname = "scrshot.paste_screenshot_settings"
     bl_label = "Paste Screenshot Settings"
+    bl_options = {'INTERNAL'}
 
     @classmethod
     def poll(cls, context):
@@ -697,7 +699,7 @@ class SCRSHOT_OT_sample_studio_light_rotation(OpInfo, Operator):
     """Move an object with the mouse, example"""
     bl_idname = "scrshot.sample_studio_light_rotation"
     bl_label = "Sample Light Rotation"
-    bl_options = {'GRAB_CURSOR', 'BLOCKING'}
+    bl_options = {'GRAB_CURSOR', 'BLOCKING', 'INTERNAL'}
 
     def modal(self, context, event):
         if event.type == 'MOUSEMOVE':
@@ -769,7 +771,14 @@ class SCRSHOT_OT_sample_studio_light_rotation(OpInfo, Operator):
 class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
     """Generate an MP4 or GIF of the selected active screenshot"""
     bl_idname = "scrshot.generate_mp4"
-    bl_label = "Generate MP4"
+    bl_label = "Generate MP4/GIF"
+
+    @classmethod
+    def poll(cls, context):
+        return (
+            poll_active_screenshot_item(context) 
+            and os.path.exists(bpy.path.abspath(context.scene.screenshot_saver.export_path))
+        )
 
     def generate_palette(self, concat_file_path) -> str:
         '''Generate a color palette from a given image sequence'''
