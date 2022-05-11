@@ -73,7 +73,7 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
             ('2', "1/2", ""),
             ('4', "1/4", "")
         ),
-        name='Downres',
+        name='Scale',
         description='Downscale the video output for smaller file sizes'
     )
 
@@ -108,6 +108,7 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
         description='Desired X resolution of image',
         default=1920,
         min=2,
+        step=2,
         soft_max=7680
     )
 
@@ -116,6 +117,7 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
         description='Desired Y resolution of image',
         default=1080,
         min=2,
+        step=2,
         soft_max=4320
     )
 

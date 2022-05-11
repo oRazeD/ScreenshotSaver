@@ -364,11 +364,6 @@ class SCRSHOT_PT_convert_ui(PanelInfo, Panel):
 
         layout.prop(scrshot_saver, 'mp4_framerate')
 
-        #if scrshot_saver.mp4_format_type == 'gif':
-        split = layout.split(align=True, factor=.3)
-        split.label(text='Downres')
-        split.prop(scrshot_saver, 'mp4_res_downscale', text='')
-
         split = layout.split(align=True, factor=.3015)
         split.label(text='Repeat')
         split.prop(scrshot_saver, 'mp4_start_repeat_count', text='Start')
@@ -388,6 +383,10 @@ class SCRSHOT_PT_convert_ui(PanelInfo, Panel):
             split_2 = col.split(align=True)
             split_2.prop(scrshot_saver, 'mp4_crop_res_x')
             split_2.prop(scrshot_saver, 'mp4_crop_res_y')
+
+        split = layout.split(align=True, factor=.3)
+        split.label(text='Scale')
+        split.prop(scrshot_saver, 'mp4_res_downscale', text='')
 
 
 ################################################################################################################

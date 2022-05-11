@@ -1,5 +1,7 @@
 import bpy, os, json, time, subprocess
 from bpy.types import Operator
+from .PIL import Image
+from .parse_metadata import read_exr_header
 from pathlib import Path
 
 import logging
@@ -813,11 +815,11 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
         subprocess.call(call_args)
         return palette_file_path
 
-    def generate_text_file(self, file_format) -> str:
+    def generate_text_file(self, input_path, file_format) -> str:
         '''Generate a text file that outlines the image sequences order and length'''
         render_files = []
-        for filename in sorted(os.listdir(self.input_path.parent)):
-            if filename.startswith(self.input_path.stem + '_') and filename.endswith(file_format):
+        for filename in sorted(os.listdir(input_path.parent)):
+            if filename.startswith(input_path.stem + '_') and filename.endswith(file_format):
                 render_files.append(filename)
 
         temp_path = Path(Path(os.path.abspath(__file__)).parent, "temp")
@@ -827,23 +829,23 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
             for idx, file_path in enumerate(render_files):
                 if idx == 0: # If start repeat has been set, add the first iterable in render_files to the txt file x amount of times
                     for _ in range(bpy.context.scene.screenshot_saver.mp4_start_repeat_count):
-                        f.write(f"file '{Path(self.input_path.parent, file_path)}'\nduration 1\n")
+                        f.write(f"file '{Path(input_path.parent, file_path)}'\nduration 1\n")
 
-                f.write(f"file '{Path(self.input_path.parent, file_path)}'\nduration 1\n") # Add duration to get rid of warnings
+                f.write(f"file '{Path(input_path.parent, file_path)}'\nduration 1\n") # Add duration to get rid of warnings
 
             # If end repeat has been set, add the final iterable in render_files to the txt file x amount of times
             for _ in range(bpy.context.scene.screenshot_saver.mp4_end_repeat_count):
-                f.write(f"file '{Path(self.input_path.parent, file_path)}'\nduration 1\n")
+                f.write(f"file '{Path(input_path.parent, file_path)}'\nduration 1\n")
         return concat_file_path
 
-    def handle_path_formatting_mp4(self) -> Path:
+    def handle_path_formatting_mp4(self, input_path) -> Path:
         '''Handle output file formatting'''
         scrshot_saver = bpy.context.scene.screenshot_saver
 
         file_numbers = []
-        for filename in os.listdir(self.input_path.parent):
+        for filename in os.listdir(input_path.parent):
             try:
-                if Path(self.input_path.parent, filename).is_file():
+                if Path(input_path.parent, filename).is_file():
                     file_numbers.append(int(filename.split('_')[-1].split(f'.{scrshot_saver.mp4_format_type}')[0]))
             except ValueError:
                 pass
@@ -854,7 +856,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
         else:
             counter = max(file_numbers)+1
 
-        file_path = str(self.input_path) + '_{:04d}'.format(counter)
+        file_path = str(input_path) + '_{:04d}'.format(counter)
 
         return Path(f'{file_path}.{scrshot_saver.mp4_format_type}')
 
@@ -862,54 +864,86 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
         scrshot_saver = context.scene.screenshot_saver
         active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
 
-        # TODO improve the system to read the actual image data and find non-divisible renders
-        if (active_scrshot.cam_res_x % 2) or (active_scrshot.cam_res_y % 2):
-            self.report({'ERROR'}, 'The selected screenshots resolution is not divisible by 2.')
-            return{'CANCELLED'}
-
         # Set input path
         if active_scrshot.use_subfolder:
             path_end = Path(active_scrshot.subfolder_name, active_scrshot.name)
         else:
             path_end = active_scrshot.name
 
-        self.input_path = Path(scrshot_saver.export_path, path_end)
+        input_path = Path(scrshot_saver.export_path, path_end)
 
         # Verify directory and file existence
-        if not self.input_path.parent.is_dir():
+        if not input_path.parent.is_dir():
             self.report({'ERROR'}, 'The render directory does not exist')
             return{'CANCELLED'}
 
-        files_list = [file_name for file_name in os.listdir(self.input_path.parent) if Path(self.input_path.parent, file_name).is_file()]
+        # Get the file extension type
+        file_format = 'exr' if scrshot_saver.format_type == 'open_exr' else scrshot_saver.format_type
+
+        # Look for any files of the correct format
+        files_list = [Path(input_path.parent, file_name) for file_name in os.listdir(input_path.parent)
+                    if Path(input_path.parent, file_name).is_file()
+                    and os.path.join(input_path.parent, file_name).endswith(file_format)
+                ]
         if not len(files_list):
-            self.report({'ERROR'}, 'There are no files in this directory')
+            self.report({'ERROR'}, 'There are no files of the correct type in this directory')
             return{'CANCELLED'}
 
-        # Get the file extension type
-        if scrshot_saver.format_type == 'open_exr':
-            file_format = 'exr'
-        else: # PNG, JPEG
-            file_format = scrshot_saver.format_type
+        # Calculate the end result resolutions, and catch anything with a resolution not divisible by 2
+        bad_res = False
+        if scrshot_saver.mp4_crop_type == 'none':
+            if scrshot_saver.format_type == 'open_exr':
+                for file in files_list:
+                    exr = read_exr_header(str(file))
+
+                    exr_width, exr_height  = int(exr['dataWindow']['xMax'])+1, int(exr['dataWindow']['yMax'])+1
+                    if (exr_width % 2) or (exr_height % 2):
+                        bad_res = True
+                        break
+            else: # PNG, JPEG
+                for file in files_list:
+                    img = Image.open(str(file))
+
+                    width, height = img.size
+                    if (width % 2) or (height % 2):
+                        bad_res = True
+                        break
+        else: # Using crop
+            if scrshot_saver.mp4_crop_type == 'to_resolution':
+                if (scrshot_saver.mp4_crop_res_x % 2) or (scrshot_saver.mp4_crop_res_y % 2):
+                    bad_res = True
+            else: # from_border
+                for file in files_list:
+                    img = Image.open(str(file))
+
+                    width, height = img.size
+                    if ((width-scrshot_saver.mp4_crop_amt_width) % 2) or ((height-scrshot_saver.mp4_crop_amt_height) % 2):
+                        bad_res = True
+                        break
+
+        if bad_res:
+            self.report({'ERROR'}, 'An image with a resolution (or crop res) that is not divisible by 2 was found.\n\nConsider using the crop feature to encode.')
+            return{'CANCELLED'}
 
         # Generate an ordered list of the frames to render
-        concat_file_path = self.generate_text_file(file_format)
+        concat_file_path = self.generate_text_file(input_path, file_format)
 
         # Handle file path formatting/versioning
-        output_path = self.handle_path_formatting_mp4()
+        output_path = self.handle_path_formatting_mp4(input_path)
 
         # Get the path of the local ffmpeg lib
         ffmpeg_path = Path(Path(os.path.abspath(__file__)).parent, "ffmpeg", "bin", "ffmpeg.exe")
 
         # Get crop width + height
         if scrshot_saver.mp4_crop_type == 'from_border':
-            crop_amt = f"in_w-{scrshot_saver.mp4_crop_amt_width}:in_h-{scrshot_saver.mp4_crop_amt_height}"
+            crop_amt = f"crop=in_w-{scrshot_saver.mp4_crop_amt_width}:in_h-{scrshot_saver.mp4_crop_amt_height}"
         elif scrshot_saver.mp4_crop_type == 'to_resolution':
-            crop_amt = f"{scrshot_saver.mp4_crop_res_x}:{scrshot_saver.mp4_crop_res_y}"
+            crop_amt = f"crop={scrshot_saver.mp4_crop_res_x}:{scrshot_saver.mp4_crop_res_y}"
         else:
-            crop_amt = "in_w:in_h"
+            crop_amt = "crop=in_w:in_h"
 
         # Get downscale amount
-        scale_amt = f"-1:{active_scrshot.cam_res_y/int(scrshot_saver.mp4_res_downscale)}"
+        scale_amt = f"scale=-1:ih/{scrshot_saver.mp4_res_downscale}"
 
         # Create args
         if scrshot_saver.mp4_format_type == 'mp4':
@@ -919,7 +953,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
                 '-f', 'concat', '-safe', '0',
                 '-r', f'{scrshot_saver.mp4_framerate}',
                 '-i', f'{concat_file_path}',
-                '-filter_complex', f"[0:v]scale={scale_amt}[z];[z]crop={crop_amt}",
+                '-filter_complex', f"[0:v]{crop_amt}[z];[z]{scale_amt}",
                 "-c:v", 'libx264',
                 '-preset', 'slow',
                 '-crf', '20',
@@ -936,7 +970,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
                 '-r', f'{scrshot_saver.mp4_framerate}',
                 '-i', f'{concat_file_path}',
                 '-i', f'{palette_file_path}',
-                '-filter_complex', f"[0:v]scale={scale_amt}[z];[z]crop={crop_amt}[z];[z][1:v]paletteuse",
+                '-filter_complex', f"[0:v]{crop_amt}[z];[z]{scale_amt}[z];[z][1:v]paletteuse",
                 f'{output_path}'
             ]
 
@@ -944,12 +978,16 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
             call_args.insert(2, '-apply_trc')
             call_args.insert(3, 'iec61966_2_1')
 
-        subprocess.call(call_args)
+        try:
+            subprocess.check_output(call_args)
+        except subprocess.CalledProcessError:
+            self.report({'ERROR'}, f"An error occured, and your {scrshot_saver.mp4_format_type.upper()} was not encoded properly.\n\nPlease send a screenshot of your console to ethan.simon.3d@gmail.com")
+            return {'CANCELLED'}
 
         if output_path.is_file():
             self.report({'INFO'}, f"{scrshot_saver.mp4_format_type.upper()} Generated!")
         else:
-            self.report({'ERROR'}, "Something went wrong, and a file was not generated.\n\nPlease send a screenshot of your console to the dev.")
+            self.report({'ERROR'}, f"An error occured, and your {scrshot_saver.mp4_format_type.upper()} was not encoded properly.\n\nPlease send a screenshot of your console to ethan.simon.3d@gmail.com")
         return {'FINISHED'}
 
 
