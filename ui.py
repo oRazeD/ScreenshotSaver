@@ -364,15 +364,30 @@ class SCRSHOT_PT_convert_ui(PanelInfo, Panel):
 
         layout.prop(scrshot_saver, 'mp4_framerate')
 
-        if scrshot_saver.mp4_format_type == 'gif':
-            split = layout.split(align=True, factor=.3)
-            split.label(text='Downres')
-            split.prop(scrshot_saver, 'mp4_res_downscale', text='')
-
+        #if scrshot_saver.mp4_format_type == 'gif':
         split = layout.split(align=True, factor=.3)
+        split.label(text='Downres')
+        split.prop(scrshot_saver, 'mp4_res_downscale', text='')
+
+        split = layout.split(align=True, factor=.3015)
         split.label(text='Repeat')
         split.prop(scrshot_saver, 'mp4_start_repeat_count', text='Start')
         split.prop(scrshot_saver, 'mp4_end_repeat_count', text='End')
+
+        split = layout.split(align=True, factor=.3)
+        split.label(text='Crop')
+
+        col = split.column(align=True)
+        col.prop(scrshot_saver, 'mp4_crop_type', text='')
+
+        if scrshot_saver.mp4_crop_type == 'from_border':
+            split_2 = col.split(align=True)
+            split_2.prop(scrshot_saver, 'mp4_crop_amt_width')
+            split_2.prop(scrshot_saver, 'mp4_crop_amt_height')
+        elif scrshot_saver.mp4_crop_type == 'to_resolution':
+            split_2 = col.split(align=True)
+            split_2.prop(scrshot_saver, 'mp4_crop_res_x')
+            split_2.prop(scrshot_saver, 'mp4_crop_res_y')
 
 
 ################################################################################################################

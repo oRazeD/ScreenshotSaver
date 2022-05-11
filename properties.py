@@ -79,7 +79,7 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
 
     mp4_end_repeat_count: IntProperty(
         name='End Repeat',
-        description='Decide how many times the end frame repeats',
+        description='How many times the end frame repeats',
         default=0,
         min=0,
         soft_max=10
@@ -87,10 +87,54 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
 
     mp4_start_repeat_count: IntProperty(
         name='Start Repeat',
-        description='Decide how many times the start frame repeats',
+        description='How many times the start frame repeats',
         default=0,
         min=0,
         soft_max=10
+    )
+
+    mp4_crop_type: EnumProperty(
+        items=(
+            ('none', "None", ""),
+            ('from_border', "from Border", ""),
+            ('to_resolution', "to Resolution", "")
+        ),
+        name='Crop',
+        description='Crop the input image sequence based on either a border crop or to a specific resolution'
+    )
+
+    mp4_crop_res_x: IntProperty(
+        name='X',
+        description='Desired X resolution of image',
+        default=1920,
+        min=2,
+        soft_max=7680
+    )
+
+    mp4_crop_res_y: IntProperty(
+        name='Y',
+        description='Desired Y resolution of image',
+        default=1080,
+        min=2,
+        soft_max=4320
+    )
+
+    mp4_crop_amt_width: IntProperty(
+        name='W',
+        description='Image width amount to crop (steps in 2)',
+        default=0,
+        min=0,
+        step=2,
+        soft_max=7678
+    )
+
+    mp4_crop_amt_height: IntProperty(
+        name='H',
+        description='Image height amount to crop (steps in 2)',
+        default=0,
+        min=0,
+        step=2,
+        soft_max=4318
     )
 
 

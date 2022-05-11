@@ -862,8 +862,9 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
         scrshot_saver = context.scene.screenshot_saver
         active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
 
+        # TODO improve the system to read the actual image data and find non-divisible renders
         if (active_scrshot.cam_res_x % 2) or (active_scrshot.cam_res_y % 2):
-            self.report({'ERROR'}, 'The selected screenshots resolution is not divisible by 2.\n\nYou will need to delete all "bad" screenshots and re-render to generate an MP4.')
+            self.report({'ERROR'}, 'The selected screenshots resolution is not divisible by 2.')
             return{'CANCELLED'}
 
         # Set input path
@@ -899,6 +900,17 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
         # Get the path of the local ffmpeg lib
         ffmpeg_path = Path(Path(os.path.abspath(__file__)).parent, "ffmpeg", "bin", "ffmpeg.exe")
 
+        # Get crop width + height
+        if scrshot_saver.mp4_crop_type == 'from_border':
+            crop_amt = f"in_w-{scrshot_saver.mp4_crop_amt_width}:in_h-{scrshot_saver.mp4_crop_amt_height}"
+        elif scrshot_saver.mp4_crop_type == 'to_resolution':
+            crop_amt = f"{scrshot_saver.mp4_crop_res_x}:{scrshot_saver.mp4_crop_res_y}"
+        else:
+            crop_amt = "in_w:in_h"
+
+        # Get downscale amount
+        scale_amt = f"-1:{active_scrshot.cam_res_y/int(scrshot_saver.mp4_res_downscale)}"
+
         # Create args
         if scrshot_saver.mp4_format_type == 'mp4':
             call_args = [
@@ -907,6 +919,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
                 '-f', 'concat', '-safe', '0',
                 '-r', f'{scrshot_saver.mp4_framerate}',
                 '-i', f'{concat_file_path}',
+                '-filter_complex', f"[0:v]scale={scale_amt}[z];[z]crop={crop_amt}",
                 "-c:v", 'libx264',
                 '-preset', 'slow',
                 '-crf', '20',
@@ -923,7 +936,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
                 '-r', f'{scrshot_saver.mp4_framerate}',
                 '-i', f'{concat_file_path}',
                 '-i', f'{palette_file_path}',
-                '-filter_complex', f"[0:v]scale=-1:{active_scrshot.cam_res_y/int(scrshot_saver.mp4_res_downscale)}[z];[z][1:v]paletteuse", #=dither=bayer:bayer_scale=4
+                '-filter_complex', f"[0:v]scale={scale_amt}[z];[z]crop={crop_amt}[z];[z][1:v]paletteuse",
                 f'{output_path}'
             ]
 
