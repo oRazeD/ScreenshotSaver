@@ -125,7 +125,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         '''Saves all to-be modified settings mostly recursively'''
         shading = self.space_data.shading
         overlay = self.space_data.overlay
-        render = context.scene.render
+        scene = context.scene
 
         # Use dir() to save every entry in the UI
         #
@@ -133,7 +133,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         # modular compared to saving everything we need individually
         self.saved_settings = {}
 
-        for data in (shading, render, render.image_settings):
+        for data in (shading, scene.render, scene.render.image_settings):
             for attr in dir(data):
                 if data not in self.saved_settings:
                     self.saved_settings[data] = {}
@@ -142,8 +142,8 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
 
         # Manual dict values (only for when we need to cherry pick one or two values from each "group")
         self.saved_settings[overlay] = {'show_overlays': overlay.show_overlays}
-        self.saved_settings[context.scene] = {'camera': context.scene.camera}
-        self.saved_settings[context.scene] = {'frame_current': context.scene.frame_current}
+        self.saved_settings[scene] = {'camera': scene.camera}
+        self.saved_settings[scene] = {'frame_current': scene.frame_current}
 
 
     def load_saved_settings(self, context, hidden_obs, hidden_colls) -> None:
@@ -155,7 +155,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         # Original shading, overlay, file path, etc settings
         self.saved_settings_overflow = {}
         for key, values in self.saved_settings.items():
-            for name, value in dict(values).items(): # dict() is unecessary but the syntax is missing otherwise
+            for name, value in dict(values).items(): # dict() is unecessary but syntax is missing otherwise
                 try:
                     setattr(key, name, value)
                 except AttributeError: # read_only attr
@@ -191,6 +191,8 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
             
             file_path = Path(file_path, path_end)
             file_path.parent.mkdir(exist_ok=True)
+
+            scene.frame_current = active_scrshot.render_frame
 
             # Get the file extension type
             if scene.screenshot_saver.format_type == 'open_exr':
@@ -237,7 +239,9 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
                     shading.use_world_space_lighting = active_scrshot.use_wsl
                     shading.studiolight_rotate_z = active_scrshot.studio_rotate_z
 
-                shading.studio_light = active_scrshot.studio_light_name
+                    shading.studio_light = active_scrshot.studio_light_name
+                elif active_scrshot.lighting_type == 'matcap':
+                    shading.studio_light = active_scrshot.matcap_light_name
 
                 shading.show_backface_culling = active_scrshot.use_backface_culling
                 shading.show_object_outline = active_scrshot.use_outline
@@ -253,9 +257,20 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
                 shading.object_outline_color = active_scrshot.outliner_color_value
 
                 shading.color_type = str(active_scrshot.color_type).upper()
-        else: # TODO EEVEE
+        else: # EEVEE
             render.engine = 'BLENDER_EEVEE'
-            shading.type = 'RENDERED'
+            shading.type = 'MATERIAL'
+
+            shading.use_scene_lights = active_scrshot.use_scene_lights
+            shading.use_scene_world = active_scrshot.use_scene_world
+
+            shading.studio_light = active_scrshot.eevee_light_name
+
+            shading.use_studiolight_view_rotation = active_scrshot.eevee_use_rotate
+            shading.studiolight_rotate_z = active_scrshot.studio_rotate_z
+            shading.studiolight_intensity = active_scrshot.eevee_intensity
+            shading.studiolight_background_alpha = active_scrshot.eevee_alpha
+            shading.studiolight_background_blur = active_scrshot.eevee_blur
 
     def handle_misc_sett(self, context) -> None:
         '''Set a handful of render/scene settings that are maintained across all screenshot renders'''
@@ -264,8 +279,6 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         shading = self.space_data.shading
         image_settings = render.image_settings
 
-        scene.frame_current = scene.screenshot_saver.render_frame
-
         scene.display.viewport_aa = 'FXAA'
 
         self.space_data.overlay.show_overlays = False
@@ -273,9 +286,6 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         shading.use_dof = False
         shading.show_xray = False
         shading.show_shadows = False
-
-        shading.use_scene_world = False
-        shading.use_scene_lights = False
 
         image_settings.color_mode = 'RGB'
         scene.display_settings.display_device = 'sRGB'
@@ -299,10 +309,8 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
     def render_screenshot(self, context) -> int:
         '''A base for calling per screenshot setup methods and rendering each screenshot'''
         if self.render_type == 'enabled':
-            scrshot_camera_coll = context.scene.scrshot_camera_coll
-
             # Begin looping through screenshots
-            rendered_screenshots = [scrshot for scrshot in scrshot_camera_coll if scrshot.enabled]
+            rendered_screenshots = [scrshot for scrshot in context.scene.scrshot_camera_coll if scrshot.enabled]
             for scrshot in rendered_screenshots:
                 # Load the user settings for this particular screenshot
                 self.handle_user_settings(context, active_scrshot=scrshot)
@@ -628,43 +636,58 @@ class SCRSHOT_OT_copy_viewport_shade_settings(OpInfo, Operator):
 
     def execute(self, context):
         shading = context.space_data.shading
-
         active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
 
-        # Apply all active shading settings
-        active_scrshot.lighting_type = str(shading.light).lower()
-        active_scrshot.color_type = str(shading.color_type).lower()
-
-        active_scrshot.studio_rotate_z = shading.studiolight_rotate_z
-        active_scrshot.use_wsl = shading.use_world_space_lighting
-
-        active_scrshot.use_backface_culling = shading.show_backface_culling
-        active_scrshot.use_cavity = shading.show_cavity
-        active_scrshot.use_outline = shading.show_object_outline
-        active_scrshot.use_spec_lighting = shading.show_specular_highlight
-
-        active_scrshot.cavity_ridge = shading.cavity_ridge_factor
-        active_scrshot.cavity_valley = shading.cavity_valley_factor
-        active_scrshot.curve_ridge = shading.curvature_ridge_factor
-        active_scrshot.curve_valley = shading.curvature_valley_factor
-
-        active_scrshot.outliner_color_value = shading.object_outline_color
-
-        active_scrshot.single_color_value = shading.single_color
-
-        # Apply all studio lights individually
-        saved_lighting_type = active_scrshot.lighting_type
+        saved_shading_type = shading.type
 
         if active_scrshot.render_type == 'workbench':
+            shading.type = 'SOLID'
+
+            active_scrshot.lighting_type = str(shading.light).lower()
+            active_scrshot.color_type = str(shading.color_type).lower()
+
+            active_scrshot.use_wsl = shading.use_world_space_lighting
+
+            active_scrshot.use_backface_culling = shading.show_backface_culling
+            active_scrshot.use_cavity = shading.show_cavity
+            active_scrshot.use_outline = shading.show_object_outline
+            active_scrshot.use_spec_lighting = shading.show_specular_highlight
+
+            active_scrshot.cavity_ridge = shading.cavity_ridge_factor
+            active_scrshot.cavity_valley = shading.cavity_valley_factor
+            active_scrshot.curve_ridge = shading.curvature_ridge_factor
+            active_scrshot.curve_valley = shading.curvature_valley_factor
+
+            active_scrshot.outliner_color_value = shading.object_outline_color
+
+            active_scrshot.single_color_value = shading.single_color
+
+            saved_lighting_type = active_scrshot.lighting_type
+
             active_scrshot.lighting_type = 'studio'
-            bpy.ops.scrshot.get_studio_light()
+            bpy.ops.scrshot.get_studio_light(light_type = 'workbench')
 
             active_scrshot.lighting_type = 'matcap'
-            bpy.ops.scrshot.get_studio_light()
-        else: # TODO EEVEE
-            pass
+            bpy.ops.scrshot.get_studio_light(light_type = 'workbench')
+ 
+            active_scrshot.lighting_type = saved_lighting_type
+            
+        else: # EEVEE
+            shading.type = 'MATERIAL'
 
-        active_scrshot.lighting_type = saved_lighting_type
+            active_scrshot.eevee_use_rotate = shading.use_studiolight_view_rotation
+            active_scrshot.eevee_intensity = shading.studiolight_intensity
+            active_scrshot.eevee_alpha = shading.studiolight_background_alpha
+            active_scrshot.eevee_blur = shading.studiolight_background_blur
+
+            active_scrshot.use_scene_lights = shading.use_scene_lights
+            active_scrshot.use_scene_world = shading.use_scene_world
+
+            bpy.ops.scrshot.get_studio_light(light_type = 'eevee')
+
+        active_scrshot.studio_rotate_z = shading.studiolight_rotate_z
+
+        shading.type = saved_shading_type
 
         self.report({'INFO'}, "Copied shading settings!")
         return {'FINISHED'}
@@ -675,6 +698,14 @@ class SCRSHOT_OT_get_studio_light(OpInfo, Operator):
     bl_idname = "scrshot.get_studio_light"
     bl_label = "Get Studio Light"
     bl_options = {'INTERNAL'}
+
+    light_type: bpy.props.EnumProperty(
+        items=(
+            ('workbench', "Workbench", ""),
+            ('eevee', "EEVEE", "")
+        ),
+        options={'HIDDEN'}
+    )
 
     @classmethod
     def poll(cls, context):
@@ -687,7 +718,8 @@ class SCRSHOT_OT_get_studio_light(OpInfo, Operator):
         saved_shading_light = shading.light
 
         active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
-        if active_scrshot.render_type == 'workbench':
+
+        if self.light_type == 'workbench':
             shading.type = 'SOLID'
 
             if active_scrshot.lighting_type == 'studio':
@@ -697,7 +729,7 @@ class SCRSHOT_OT_get_studio_light(OpInfo, Operator):
             elif active_scrshot.lighting_type == 'matcap':
                 shading.light = 'MATCAP'
                 active_scrshot.matcap_light_name = shading.studio_light
-        else: # TODO EEVEE
+        else: # EEVEE
             shading.type = 'MATERIAL'
 
             active_scrshot.eevee_light_name = shading.studio_light
@@ -715,6 +747,14 @@ class SCRSHOT_OT_sample_studio_light_rotation(OpInfo, Operator):
     bl_label = "Sample Light Rotation"
     bl_options = {'GRAB_CURSOR', 'BLOCKING', 'INTERNAL'}
 
+    light_type: bpy.props.EnumProperty(
+        items=(
+            ('workbench', "Workbench", ""),
+            ('eevee', "EEVEE", "")
+        ),
+        options={'HIDDEN'}
+    )
+
     def modal(self, context, event):
         if event.type == 'MOUSEMOVE':
             offset = event.mouse_x - event.mouse_prev_x
@@ -724,8 +764,9 @@ class SCRSHOT_OT_sample_studio_light_rotation(OpInfo, Operator):
                 self.shading.studiolight_rotate_z = 3.141592
             elif self.shading.studiolight_rotate_z >= 3.141592:
                 self.shading.studiolight_rotate_z = -3.141592
-
+            
             self.active_scrshot.studio_rotate_z = self.shading.studiolight_rotate_z
+
             studiolight_rotate_z_degree = self.shading.studiolight_rotate_z * 180 / 3.14159265359
 
             context.area.header_text_set(f"Light Rotation Sample: {round(studiolight_rotate_z_degree)}")
@@ -753,6 +794,9 @@ class SCRSHOT_OT_sample_studio_light_rotation(OpInfo, Operator):
         self.shading.light = self.saved_light
         self.shading.use_world_space_lighting = self.saved_use_wsl
         self.shading.studiolight_rotate_z = self.saved_studiolight_rot_z
+
+        self.shading.use_scene_world = self.saved_use_scene_world
+        self.shading.use_studiolight_view_rotation = self.saved_use_studiolight_view_rotation
         return {'FINISHED'}
 
     def invoke(self, context, event):
@@ -764,17 +808,26 @@ class SCRSHOT_OT_sample_studio_light_rotation(OpInfo, Operator):
         self.saved_light = self.shading.light
         self.saved_use_wsl = self.shading.use_world_space_lighting
 
-        self.saved_item_rotate_z = self.active_scrshot.studio_rotate_z
         self.saved_studiolight_rot_z = self.shading.studiolight_rotate_z
+
+        self.saved_use_scene_world = self.shading.use_scene_world
+        self.saved_use_studiolight_view_rotation = self.shading.use_studiolight_view_rotation
+
+        self.saved_item_rotate_z = self.active_scrshot.studio_rotate_z
+
+        if self.light_type == 'workbench':
+            self.shading.type = 'SOLID'
+            self.shading.light = 'STUDIO'
+            self.shading.use_world_space_lighting = True
+        else: # EEVEE
+            self.shading.type = 'MATERIAL'
+            self.shading.use_scene_world = False
+            self.shading.use_studiolight_view_rotation = True
 
         if self.active_scrshot.studio_rotate_z != 0:
             self.shading.studiolight_rotate_z = self.active_scrshot.studio_rotate_z
         else:
             self.active_scrshot.studio_rotate_z = self.shading.studiolight_rotate_z
-
-        self.shading.type = 'SOLID'
-        self.shading.light = 'STUDIO'
-        self.shading.use_world_space_lighting = True
 
         context.window.cursor_set('MOVE_X')
         context.area.header_text_set(f"Light Rotation Sample: {round(self.active_scrshot.studio_rotate_z)}")
@@ -881,7 +934,8 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
         file_format = 'exr' if scrshot_saver.format_type == 'open_exr' else scrshot_saver.format_type
 
         # Look for any files of the correct format
-        files_list = [Path(input_path.parent, file_name) for file_name in os.listdir(input_path.parent)
+        files_list = [
+                    Path(input_path.parent, file_name) for file_name in os.listdir(input_path.parent)
                     if Path(input_path.parent, file_name).is_file()
                     and os.path.join(input_path.parent, file_name).endswith(file_format)
                 ]

@@ -45,13 +45,6 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
         description='Toggle the viewport visibility of the cameras collection'
     )
 
-    render_frame: IntProperty(
-        name='Render Frame',
-        description="The frame to render all screenshots on",
-        default=0,
-        min=0
-    )
-
     mp4_format_type: EnumProperty(
         items=(
             ('mp4', "MP4", ""),
@@ -138,7 +131,6 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
         step=2,
         soft_max=4318
     )
-
 
 
 class SCRSHOT_collection_property(bpy.types.PropertyGroup):
@@ -258,9 +250,16 @@ class SCRSHOT_collection_property(bpy.types.PropertyGroup):
         update=change_lens_flip
     )
 
+    render_frame: IntProperty(
+        name='Render Frame',
+        description="The frame to render this screenshot on",
+        default=0,
+        min=0
+    )
+
     # Export Properties
     use_subfolder: BoolProperty(
-        name='Export to Subdir',
+        name='to Subfolder',
         default=True,
         description='Render this screenshot to a subfolder of the Export Path'
     )
@@ -293,7 +292,6 @@ class SCRSHOT_collection_property(bpy.types.PropertyGroup):
         default=False,
         description='Make the light fixed and not follow the camera (Recommended for static shots)'
     )
-    studio_rotate_z: FloatProperty(name='Rotation', min=-3.14159265359, max=3.14159265359, subtype='ANGLE')
     color_type: EnumProperty(
         items=(
             ('material', "Material", ""),
@@ -342,6 +340,48 @@ class SCRSHOT_collection_property(bpy.types.PropertyGroup):
         description='Render specular highlights',
         default=True
     )
+
+    eevee_light_name: StringProperty(default='forest.exr')
+    use_scene_lights: BoolProperty(
+        name='Use Scene Lights',
+        description='Render lights and light probes of the scene',
+        default=True
+    )
+    use_scene_world: BoolProperty(
+        name='Use Scene World',
+        description='Use scene world for lighting',
+        default=True
+    )
+    eevee_use_rotate: BoolProperty(
+        name='Use Locked Rotation',
+        description=""
+    )
+    eevee_intensity: FloatProperty(
+        name='Strength',
+        description="",
+        default=1,
+        min=0,
+        max=2,
+        subtype='FACTOR'
+    )
+    eevee_alpha: FloatProperty(
+        name='World Opacity',
+        description="",
+        default = 0,
+        min=0,
+        max=1,
+        subtype='FACTOR'
+    )
+    eevee_blur: FloatProperty(
+        name='Blur',
+        description="",
+        default = .5,
+        min=0,
+        max=1,
+        subtype='FACTOR'
+    )
+
+    studio_rotate_z: FloatProperty(name='Rotation', min=-3.14159265359, max=3.14159265359, subtype='ANGLE')
 
 
 ##################################

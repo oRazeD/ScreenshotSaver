@@ -79,7 +79,7 @@ class SCRSHOT_PT_ui(PanelInfo, Panel):
         col2.scale_y = 1.25
         col2.operator('scrshot.render_screenshots', text='Render All Screenshots', icon='RENDER_STILL').render_type = 'enabled'
         
-        col.operator('scrshot.render_screenshots', text='Render Single Screenshot').render_type = 'single'
+        col.operator('scrshot.render_screenshots', text='Render Active Screenshot').render_type = 'single'
 
         box = col.box()
         split = box.split(factor=.35)
@@ -105,12 +105,6 @@ class SCRSHOT_PT_ui(PanelInfo, Panel):
             col.prop(image_settings, 'compression', text='Lossless Compression')
         elif scrshot_saver.format_type == 'jpeg':
             col.prop(image_settings, 'quality')
-
-        col = box.column()
-
-        split = col.split(factor=.35)
-        split.label(text='Frame')
-        split.prop(scrshot_saver, 'render_frame', text='')
 
 
 class SCRSHOT_PT_screenshot_manager(PanelInfo, Panel):
@@ -214,6 +208,11 @@ class SCRSHOT_PT_screenshot_settings(PanelInfo, Panel):
             col2.prop(active_scrshot, 'lens_flip_x', icon='CHECKBOX_HLT' if active_scrshot.lens_flip_x else 'CHECKBOX_DEHLT')
             col2.prop(active_scrshot, 'lens_flip_y', icon='CHECKBOX_HLT' if active_scrshot.lens_flip_y else 'CHECKBOX_DEHLT')
 
+            col = layout.column()
+            split = col.split(factor=.3)
+            split.label(text='Frame')
+            split.prop(active_scrshot, 'render_frame', text='')
+
             col = layout.column(align=True)
             col.prop(camera_data, 'passepartout_alpha')
             col.prop(camera_data, 'display_size')
@@ -254,7 +253,7 @@ class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
 
             if active_scrshot.lighting_type in {'studio', 'matcap'}:
                 split = col_shading.split(factor=.6, align=True)
-                split.operator("scrshot.get_studio_light", icon='MATSPHERE', text='Get Studio Light' if active_scrshot.lighting_type == 'studio' else 'Get MatCap')
+                split.operator("scrshot.get_studio_light", icon='MATSPHERE', text='Get Studio Light' if active_scrshot.lighting_type == 'studio' else 'Get MatCap').light_type = 'workbench'
 
                 row = split.row(align=True)
                 row.enabled = False
@@ -270,7 +269,7 @@ class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
 
                 row = split.row(align=True)
                 row.enabled = active_scrshot.use_wsl
-                row.operator("scrshot.sample_studio_light_rotation", text='', icon='ARROW_LEFTRIGHT')
+                row.operator("scrshot.sample_studio_light_rotation", text='', icon='ARROW_LEFTRIGHT').light_type = 'workbench'
                 row.prop(active_scrshot, 'studio_rotate_z')
 
             col_shading.separator(factor=1.5)
@@ -322,7 +321,39 @@ class SCRSHOT_PT_screenshot_shading_settings(PanelInfo, Panel):
 
                 col.box().prop(active_scrshot, 'use_spec_lighting')
         else: # EEVEE
-            pass
+            split = col_shading.split(factor=.35)
+            split.label(text='')
+            split.prop(active_scrshot, 'use_scene_lights')
+
+            split = col_shading.split(factor=.35)
+            split.label(text='')
+            split.prop(active_scrshot, 'use_scene_world')
+
+            if not active_scrshot.use_scene_world:
+                split = col_shading.split(factor=.6, align=True)
+                split.operator("scrshot.get_studio_light", icon='MATSPHERE', text='Get HDRi').light_type = 'eevee'
+
+                row = split.row(align=True)
+                row.enabled = False
+                row.prop(active_scrshot, 'eevee_light_name', text='')
+
+                col_shading.separator(factor=.5)
+
+                col = col_shading.column(align=True)
+
+                row = col.row(align=True)
+                row.prop(active_scrshot, 'eevee_use_rotate', text='', icon = 'WORLD')
+
+                row.separator()
+
+                row2 = row.row(align=True)
+                row2.enabled = active_scrshot.eevee_use_rotate
+                row2.operator("scrshot.sample_studio_light_rotation", text='', icon='ARROW_LEFTRIGHT').light_type = 'eevee'
+                row2.prop(active_scrshot, 'studio_rotate_z')
+
+                col.prop(active_scrshot, 'eevee_intensity')
+                col.prop(active_scrshot, 'eevee_alpha')
+                col.prop(active_scrshot, 'eevee_blur')
 
 
 class SCRSHOT_PT_screenshot_export_settings(PanelInfo, Panel):
@@ -334,13 +365,8 @@ class SCRSHOT_PT_screenshot_export_settings(PanelInfo, Panel):
 
         layout = self.layout
 
-        split = layout.split(factor=.35)
-        split.label(text='')
+        split = layout.split(factor=.45)
         split.prop(active_scrshot, 'use_subfolder')
-
-        split = layout.split(factor=.3)
-        split.enabled = active_scrshot.use_subfolder
-        split.label(text='Dir Name')
         split.prop(active_scrshot, 'subfolder_name', text='')
 
 
