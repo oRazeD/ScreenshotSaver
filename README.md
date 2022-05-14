@@ -17,10 +17,10 @@ ScreenshotSaver is a Blender tool for easily rendering screenshots of your WIPs 
 - Efficiently add and manipulate screenshot cameras
     - Per camera resolution control
     - Per camera custom Workbench & EEVEE shading setups
+    - Per camera specific frame rendering
     - Copy camera settings between different screenshot items
     - Quick preview & selection toggles for each screenshot camera
 - Screenshots respect render visibility
-- Specific frame rendering (not per camera yet)
 - Take screenshots in EXR, PNG, or JPEG
 - Automatic folder creation for neat, reliable and organized file structure
 - Option to automatically render screenshots on file save for a hands-off approach to collecting progress shots
