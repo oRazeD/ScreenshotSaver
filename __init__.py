@@ -4,7 +4,7 @@ bl_info = {
     "location": "3D View -> Sidebar -> Screenshot Saver",
     "description": "A tool for taking screenshots when you save",
     "version":(0, 1),
-    "blender":(3, 0, 0),
+    "blender":(3, 1, 2),
     "tracker_url": "https://discord.com/invite/wHAyVZG",
     "category": "3D View"
 }
@@ -31,9 +31,9 @@ def screenshot_save_handler(scene) -> None:
             display_error_message('Could not render because no screenshot cameras exist.') # Send this before saving
             return None
 
-        # Render buffer when saving more than one time every 5 seconds
-        if time.time() - old_time > 5:
-            bpy.ops.scrshot.render_screenshots()
+        # Render buffer when saving more than one time every 30 seconds
+        if time.time() - old_time > 30:
+            bpy.ops.scrshot.render_screenshots(render_type='enabled')
 
             old_time = time.time()
 
