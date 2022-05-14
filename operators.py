@@ -229,34 +229,35 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         render.resolution_x = active_scrshot.cam_res_x
         render.resolution_y = active_scrshot.cam_res_y
 
+        if active_scrshot.use_defaults:
+            return
+
         if active_scrshot.render_type == 'workbench':
             shading.type = 'SOLID'
 
-            if not active_scrshot.use_defaults:
-                shading.light = str(active_scrshot.lighting_type).upper()
+            shading.light = str(active_scrshot.lighting_type).upper()
 
-                if active_scrshot.lighting_type == 'studio':
-                    shading.use_world_space_lighting = active_scrshot.use_wsl
-                    shading.studiolight_rotate_z = active_scrshot.studio_rotate_z
+            if active_scrshot.lighting_type == 'studio':
+                shading.use_world_space_lighting = active_scrshot.use_wsl
+                shading.studiolight_rotate_z = active_scrshot.studio_rotate_z
+                shading.studio_light = active_scrshot.studio_light_name
+            elif active_scrshot.lighting_type == 'matcap':
+                shading.studio_light = active_scrshot.matcap_light_name
 
-                    shading.studio_light = active_scrshot.studio_light_name
-                elif active_scrshot.lighting_type == 'matcap':
-                    shading.studio_light = active_scrshot.matcap_light_name
+            shading.show_backface_culling = active_scrshot.use_backface_culling
+            shading.show_object_outline = active_scrshot.use_outline
+            shading.show_cavity = active_scrshot.use_cavity
+            shading.show_specular_highlight = active_scrshot.use_spec_lighting
 
-                shading.show_backface_culling = active_scrshot.use_backface_culling
-                shading.show_object_outline = active_scrshot.use_outline
-                shading.show_cavity = active_scrshot.use_cavity
-                shading.show_specular_highlight = active_scrshot.use_spec_lighting
+            shading.cavity_type = 'BOTH'
+            shading.cavity_ridge_factor = active_scrshot.cavity_ridge
+            shading.cavity_valley_factor = active_scrshot.cavity_valley
+            shading.curvature_ridge_factor = active_scrshot.curve_ridge
+            shading.curvature_valley_factor = active_scrshot.curve_valley
 
-                shading.cavity_type = 'BOTH'
-                shading.cavity_ridge_factor = active_scrshot.cavity_ridge
-                shading.cavity_valley_factor = active_scrshot.cavity_valley
-                shading.curvature_ridge_factor = active_scrshot.curve_ridge
-                shading.curvature_valley_factor = active_scrshot.curve_valley
+            shading.object_outline_color = active_scrshot.outliner_color_value
 
-                shading.object_outline_color = active_scrshot.outliner_color_value
-
-                shading.color_type = str(active_scrshot.color_type).upper()
+            shading.color_type = str(active_scrshot.color_type).upper()
         else: # EEVEE
             render.engine = 'BLENDER_EEVEE'
             shading.type = 'MATERIAL'
