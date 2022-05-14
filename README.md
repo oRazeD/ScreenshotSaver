@@ -42,9 +42,10 @@ https://user-images.githubusercontent.com/31065180/137642217-d51470d3-a243-438f-
 
 # TODO / Future Update Paths
 
-- [ ] TODO
+- [ ] Support more image formats
+- [ ] Support animation rendering (will likely be very slow, maybe out of scope)
 
 
 # Known Issues
 
-- TODO
+- In some very specific cases, GIF may fail to encode JPEGs due to an internal FFMPEG error. Sometimes finding and removing the "bad" image fixes this.
