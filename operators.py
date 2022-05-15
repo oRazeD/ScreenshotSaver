@@ -133,7 +133,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         # modular compared to saving everything we need individually
         self.saved_settings = {}
 
-        for data in (shading, scene.render, scene.render.image_settings):
+        for data in (shading, scene.render, scene.render.image_settings, scene.display, scene.eevee):
             for attr in dir(data):
                 if data not in self.saved_settings:
                     self.saved_settings[data] = {}
@@ -229,11 +229,11 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         render.resolution_x = active_scrshot.cam_res_x
         render.resolution_y = active_scrshot.cam_res_y
 
-        if active_scrshot.use_defaults:
-            return
-
         if active_scrshot.render_type == 'workbench':
             shading.type = 'SOLID'
+
+            if active_scrshot.use_defaults:
+                return
 
             shading.light = str(active_scrshot.lighting_type).upper()
 
@@ -262,6 +262,9 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
             render.engine = 'BLENDER_EEVEE'
             shading.type = 'MATERIAL'
 
+            if active_scrshot.use_defaults:
+                return
+
             shading.use_scene_lights = active_scrshot.use_scene_lights
             shading.use_scene_world = active_scrshot.use_scene_world
 
@@ -281,6 +284,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         image_settings = render.image_settings
 
         scene.display.viewport_aa = 'FXAA'
+        scene.eevee.taa_samples = 16
 
         self.space_data.overlay.show_overlays = False
 
