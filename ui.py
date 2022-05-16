@@ -1,6 +1,6 @@
 import bpy, os
 from bpy.types import Panel
-from .operators import poll_active_screenshot_item
+from .operators import active_screenshot_exists, export_path_exists
 
 
 ################################################################################################################
@@ -57,7 +57,7 @@ class SCRSHOT_PT_ui(PanelInfo, Panel):
     def draw(self, context):
         scrshot_saver = context.scene.screenshot_saver
 
-        correct_export_path = os.path.exists(bpy.path.abspath(scrshot_saver.export_path))
+        export_path = export_path_exists()
 
         layout = self.layout
 
@@ -65,7 +65,7 @@ class SCRSHOT_PT_ui(PanelInfo, Panel):
 
         row = col.row(align=True)
         row.scale_y = 1.5
-        row.enabled = correct_export_path
+        row.enabled = export_path
         row.prop(
             scrshot_saver,
             'record_on_save',
@@ -86,7 +86,7 @@ class SCRSHOT_PT_ui(PanelInfo, Panel):
         split.label(text='Export Path')
 
         row = split.row(align=True)
-        row.alert = not correct_export_path
+        row.alert = not export_path
         row.prop(scrshot_saver, 'export_path')
         row.alert = False
         row.operator('scrshot.open_folder', text='', icon='FOLDER_REDIRECT')
@@ -150,7 +150,7 @@ class SCRSHOT_PT_screenshot_settings(PanelInfo, Panel):
 
     @classmethod
     def poll(cls, context):
-        return poll_active_screenshot_item(context)
+        return active_screenshot_exists()
 
     def draw(self, context):
         active_scrshot = get_active_scrshot()

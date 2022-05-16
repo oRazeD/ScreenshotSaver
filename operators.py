@@ -15,13 +15,22 @@ if "PYDEVD_USE_FRAME_EVAL" in os.environ: # If using the Python Dev add-on for b
 ################################################################################################################
 
 
-def poll_active_screenshot_item(context) -> bool:
+def active_screenshot_exists() -> bool:
     '''Poll for the active screenshot item'''
-    scene = context.scene
+    scene = bpy.context.scene
 
     if not len(scene.scrshot_camera_coll):
         return False
     elif (scene.scrshot_camera_index + 1) > len(scene.scrshot_camera_coll):
+        return False
+    return True
+
+
+def export_path_exists() -> bool:
+    '''Poll for if the export path exists'''
+    export_path = bpy.context.scene.screenshot_saver.export_path
+
+    if not os.path.exists(bpy.path.abspath(export_path)) and export_path != '//screenshots':
         return False
     return True
 
@@ -32,15 +41,6 @@ def display_error_message(message='', title='Screenshot Saver Warning', icon='ER
         self.layout.label(text=message)
 
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
-
-
-def disable_viewlayer_exclusion(context) -> None:
-    internal_coll = bpy.data.collections.get('ScrSaver Cameras (do not touch)')
-    if internal_coll.name in context.view_layer.layer_collection.children:
-        vlayer = context.view_layer.layer_collection.children.get(internal_coll.name)
-        
-        if vlayer is not None:
-            vlayer.exclude = False
 
 
 class OpInfo: # Mix-in class
@@ -85,10 +85,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
 
     @classmethod
     def poll(cls, context):
-        return (
-            poll_active_screenshot_item(context) 
-            and os.path.exists(bpy.path.abspath(context.scene.screenshot_saver.export_path))
-        )
+        return active_screenshot_exists() and export_path_exists()
 
     def get_set_hidden_objects(self, context) -> dict:
         '''Generate a dict of all objects and collections that will be hidden for the viewport render and hide them'''
@@ -332,8 +329,15 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
             return 1
 
     def execute(self, context):
+        if not bpy.data.filepath:
+            self.report({'ERROR'}, "Please save a blender file before recording screenshots")
+            return {'CANCELLED'}
+
         # Start counting execution time
         start = time.time()
+
+        screenshots_path = Path(bpy.path.abspath("//screenshots"))
+        screenshots_path.mkdir(exist_ok=True)
 
         self.get_space_data(context)
 
@@ -455,7 +459,7 @@ class SCRSHOT_OT_delete_screenshot_item(OpInfo, Operator):
 
     @classmethod
     def poll(cls, context):
-        return poll_active_screenshot_item(context)
+        return active_screenshot_exists()
 
     def execute(self, context):
         scene = context.scene
@@ -506,7 +510,7 @@ class SCRSHOT_OT_select_and_preview(OpInfo, Operator):
 
     @classmethod
     def poll(cls, context):
-        return poll_active_screenshot_item(context)
+        return active_screenshot_exists()
 
     def execute(self, context):
         scene = context.scene
@@ -545,7 +549,7 @@ class SCRSHOT_OT_copy_screenshot_settings(OpInfo, Operator):
 
     @classmethod
     def poll(cls, context):
-        return poll_active_screenshot_item(context)
+        return active_screenshot_exists()
 
     def execute(self, context):
         active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
@@ -597,7 +601,7 @@ class SCRSHOT_OT_paste_screenshot_settings(OpInfo, Operator):
         addon_path = os.path.dirname(__file__)
         screenshot_copy_path = os.path.join(addon_path, "temp\\latest_screenshot_copy.json")
 
-        return poll_active_screenshot_item(context) and os.path.isfile(screenshot_copy_path)
+        return active_screenshot_exists() and os.path.isfile(screenshot_copy_path)
 
     def execute(self, context):
         # Add-on root path & temp file path
@@ -637,7 +641,7 @@ class SCRSHOT_OT_copy_viewport_shade_settings(OpInfo, Operator):
 
     @classmethod
     def poll(cls, context):
-        return poll_active_screenshot_item(context)
+        return active_screenshot_exists()
 
     def execute(self, context):
         shading = context.space_data.shading
@@ -714,7 +718,7 @@ class SCRSHOT_OT_get_studio_light(OpInfo, Operator):
 
     @classmethod
     def poll(cls, context):
-        return poll_active_screenshot_item(context)
+        return active_screenshot_exists()
 
     def execute(self, context):
         shading = context.space_data.shading
@@ -847,10 +851,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
 
     @classmethod
     def poll(cls, context):
-        return (
-            poll_active_screenshot_item(context) 
-            and os.path.exists(bpy.path.abspath(context.scene.screenshot_saver.export_path))
-        )
+        return active_screenshot_exists() and export_path_exists()
 
     def generate_palette(self, concat_file_path) -> str:
         '''Generate a color palette from a given image sequence'''
@@ -928,7 +929,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
         else:
             path_end = active_scrshot.name
 
-        input_path = Path(scrshot_saver.export_path, path_end)
+        input_path = Path(bpy.path.abspath(scrshot_saver.export_path), path_end)
 
         # Verify directory and file existence
         if not input_path.parent.is_dir():

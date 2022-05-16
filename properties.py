@@ -18,12 +18,12 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
             return None
 
     def update_export_path(self, context) -> None:
-        if self.export_path != ' ' and not os.path.exists(bpy.path.abspath(self.export_path)):
-            self.export_path = ' '
+        if self.export_path != '//screenshots' and not os.path.exists(bpy.path.abspath(self.export_path)):
+            self.export_path = '//screenshots'
 
     ### PROPERTIES ###
 
-    export_path: StringProperty(name="", default=" ", description="", subtype='DIR_PATH', update=update_export_path) #default="//screenshots\\"
+    export_path: StringProperty(name="", default="//screenshots", description="", subtype='DIR_PATH', update=update_export_path)
 
     format_type: EnumProperty(
         items=(
