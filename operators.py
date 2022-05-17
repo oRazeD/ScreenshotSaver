@@ -1,7 +1,7 @@
 import bpy, os, json, time, subprocess
 from bpy.types import Operator
-from .PIL import Image
-from .parse_metadata import read_exr_header
+from .pillow import Image
+from .exr_parse.parse_metadata import read_exr_header
 from pathlib import Path
 
 import logging
@@ -37,7 +37,7 @@ def export_path_exists() -> bool:
 
 def display_error_message(message='', title='Screenshot Saver Warning', icon='ERROR') -> None:
     '''Display a custom error message in situations where a regular error message cannot be sent'''
-    def draw(self):
+    def draw(self, context):
         self.layout.label(text=message)
 
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)

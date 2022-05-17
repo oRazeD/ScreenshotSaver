@@ -11,12 +11,6 @@ from .operators import display_error_message
 class SCRSHOT_property_group(bpy.types.PropertyGroup):
     ### UPDATE FUNCTIONS ###
 
-    def bad_recording_setup(self, context) -> None:
-        if self.record_on_save and not len(context.scene.scrshot_camera_coll):
-            display_error_message('Could not render because no screenshot cameras exist.')
-            self.record_on_save = False
-            return None
-
     def update_export_path(self, context) -> None:
         if self.export_path != '//screenshots' and not os.path.exists(bpy.path.abspath(self.export_path)):
             self.export_path = '//screenshots'
@@ -36,8 +30,7 @@ class SCRSHOT_property_group(bpy.types.PropertyGroup):
 
     record_on_save: BoolProperty(
         name="Record on Save",
-        description='Begin/stop recording screenshots when you save the file',
-        update=bad_recording_setup
+        description='Begin/stop recording screenshots when you save the file'
     )
 
     cameras_visible: BoolProperty(
@@ -157,7 +150,7 @@ class SCRSHOT_collection_property(bpy.types.PropertyGroup):
 
         if repeated_names:
             self.name = self.saved_name
-            display_error_message('You cannot use repeating screenshot names.')
+            display_error_message(message='You cannot use repeating screenshot names.')
             return None
 
         # Rename identifiers for object/camera data

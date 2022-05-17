@@ -1,4 +1,4 @@
-import bpy, os
+import bpy
 from bpy.types import Panel
 from .operators import active_screenshot_exists, export_path_exists
 

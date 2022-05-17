@@ -28,7 +28,7 @@ def screenshot_save_handler(scene) -> None:
 
     if scene.screenshot_saver.record_on_save:
         if not len(scene.scrshot_camera_coll):
-            display_error_message('Could not render because no screenshot cameras exist.') # Send this before saving
+            display_error_message(message='Could not render because no screenshot cameras exist.') # Send this before saving
             return None
 
         # Render buffer when saving more than one time every 30 seconds
