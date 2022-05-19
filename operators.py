@@ -1,3 +1,4 @@
+from ctypes import Union
 import bpy, os, json, time, subprocess
 from bpy.types import Operator
 from .pillow import Image
@@ -89,23 +90,58 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
 
     def get_set_hidden_objects(self, context) -> dict:
         '''Generate a dict of all objects and collections that will be hidden for the viewport render and hide them'''
-        # TODO Does isolate toggle operator not work when taking screenshots?
-        hidden_obs = {ob:(ob.hide_render, ob.hide_viewport) for ob in context.view_layer.objects} #  if ob.hide_render
-        hidden_colls = {coll:(coll.hide_render, coll.hide_viewport) for coll in bpy.data.collections}  # if coll.hide_render
+        vlayer = context.view_layer
+        
+        def layer_traverse(coll, layer=vlayer.layer_collection) -> bpy.types.LayerCollection:
+            '''Traverse all layer collections to find the matching one'''
+            if layer.collection == coll:
+                yield {'layer_ob': layer, 'layer_vis': layer.hide_viewport}
 
-        for ob, vis in hidden_obs.items():
-            if vis[0]:
+            for child in layer.children:
+                yield from layer_traverse(coll, child)
+
+        ob_hide_states = {ob:{
+                    'render_vis': ob.hide_render,
+                    'viewport_vis': ob.hide_viewport,
+                    'layer_vis': ob.hide_get()
+                }
+            for ob in vlayer.objects
+        }
+        coll_hide_states = {coll:{
+                    'render_vis': coll.hide_render,
+                    'viewport_vis': coll.hide_viewport,
+                    'layer': next(layer_traverse(coll))
+                }
+            for coll in bpy.data.collections
+        }
+
+        # Leave local view if currently used
+        self.local_view = False
+        for area in context.screen.areas:
+            if area.type == 'VIEW_3D' and area.spaces[0].local_view:
+                for region in area.regions:
+                    if region.type == 'WINDOW':
+                        self.local_view = True
+                        self.report_string = 'Local View exited to render'
+
+                        override = {'area': area, 'region': region}
+                        bpy.ops.view3d.localview(override)
+
+        for ob, vis in ob_hide_states.items():
+            if vis['render_vis']:
                 ob.hide_viewport = True
             else:
                 ob.hide_viewport = False
+                ob.hide_set(False)
 
-        for coll, vis in hidden_colls.items():
-            if vis[0]:
+        for coll, vis in coll_hide_states.items():
+            if vis['render_vis']:
                 coll.hide_viewport = True
             else:
                 coll.hide_viewport = False
+                vis['layer']['layer_ob'].hide_viewport = False
 
-        return hidden_obs, hidden_colls
+        return ob_hide_states, coll_hide_states
 
     def get_space_data(self, context) -> None:
         '''Gets the active space data based on where the cursor is located and handles poor contexts'''
@@ -143,7 +179,7 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         self.saved_settings[scene] = {'frame_current': scene.frame_current}
 
 
-    def load_saved_settings(self, context, hidden_obs, hidden_colls) -> None:
+    def load_saved_settings(self, context, ob_hide_states, coll_hide_states) -> None:
         '''A "refresh" method that returns all changed attributes to their original values mostly recursively'''
         # Original UI
         if self.saved_area_type is not None:
@@ -161,17 +197,13 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
                     log.debug(f'{name}: {value} had a TypeError, this should be normal.')
 
         # Unhide objects/collections hidden in the viewport
-        for ob, vis in hidden_obs.items():
-            if not vis[1]:
-                ob.hide_viewport = False
-            else:
-                ob.hide_viewport = True
+        for ob, vis in ob_hide_states.items():
+            ob.hide_viewport = vis['viewport_vis']
+            ob.hide_set(vis['layer_vis'])
 
-        for coll, vis in hidden_colls.items():
-            if not vis[1]:
-                coll.hide_viewport = False
-            else:
-                coll.hide_viewport = True
+        for coll, vis in coll_hide_states.items():
+            coll.hide_viewport = vis['viewport_vis']
+            vis['layer']['layer_ob'].hide_viewport = vis['layer']['layer_vis']
 
         # Original camera view
         if self.switch_cam:
@@ -336,12 +368,14 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         # Start counting execution time
         start = time.time()
 
+        self.report_string = ''
+
         screenshots_path = Path(bpy.path.abspath("//screenshots"))
         screenshots_path.mkdir(exist_ok=True)
 
         self.get_space_data(context)
 
-        hidden_obs, hidden_colls = self.get_set_hidden_objects(context)
+        ob_hide_states, coll_hide_states = self.get_set_hidden_objects(context)
 
         # Save current shading settings
         self.save_settings(context)
@@ -353,10 +387,13 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         render_count = self.render_screenshot(context)
 
         # Reload original shading/render vis settings
-        self.load_saved_settings(context, hidden_obs, hidden_colls)
+        self.load_saved_settings(context, ob_hide_states, coll_hide_states)
 
-        # This is only scene when rendering manually, will get overwritten by standard saving message
-        self.report({'INFO'}, f"{render_count} Screenshot(s) Rendered!")
+        # This is only seen when rendering manually, will get overwritten by standard saving message
+        if self.report_string:
+            self.report({'WARNING'}, f"{render_count} Screenshot(s) Rendered!    INFO: {self.report_string}")
+        else:
+            self.report({'INFO'}, f"{render_count} Screenshot(s) Rendered!")
 
         # End the timer
         end = time.time()
