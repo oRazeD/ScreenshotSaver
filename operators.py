@@ -339,7 +339,6 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
         if scene.screenshot_saver.format_type != 'jpeg':
             image_settings.color_depth = '16'
 
-
     def render_screenshot(self, context) -> int:
         '''A base for calling per screenshot setup methods and rendering each screenshot'''
         if self.render_type == 'enabled':
@@ -900,7 +899,7 @@ class SCRSHOT_OT_generate_mp4(OpInfo, Operator):
             '-y',
             '-f', 'concat', '-safe', '0',
             '-i', f'{concat_file_path}',
-            '-vf', 'palettegen=reserve_transparent=1:transparency_color=000000:stats_mode=diff',
+            '-vf', 'palettegen=reserve_transparent=1:transparency_color=000000:stats_mode=full',
             f'{palette_file_path}'
         ]
 
