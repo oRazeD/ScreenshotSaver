@@ -1,4 +1,3 @@
-from ctypes import Union
 import bpy, os, json, time, subprocess
 from bpy.types import Operator
 from .pillow import Image
