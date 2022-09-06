@@ -277,7 +277,7 @@ class SCRSHOT_collection_property(bpy.types.PropertyGroup):
             ('flat', "Flat", "")
         )
     )
-    studio_light_name: StringProperty(default='default')
+    studio_light_name: StringProperty(default='Default')
     matcap_light_name: StringProperty(default='basic_1.exr')
     eevee_light_name: StringProperty(default='city.exr')
     use_wsl: BoolProperty(

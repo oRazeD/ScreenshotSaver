@@ -128,17 +128,17 @@ class SCRSHOT_PT_screenshot_manager(PanelInfo, Panel):
             icon='LOCKVIEW_ON' if context.space_data.lock_camera else 'LOCKVIEW_OFF'
         )
 
-        col2.separator(factor=1.25)
+        if len(context.scene.scrshot_camera_coll):
+            col2.separator(factor=1.25)
 
-        col2.operator("scrshot.delete_screenshot_item", text='', icon='TRASH')
+            col2.operator("scrshot.delete_screenshot_item", text='', icon='TRASH')
 
-        col2.separator(factor=1.25)
+            col2.separator(factor=1.25)
 
-        col3 = col2.column(align=True)
-        col3.operator("scrshot.copy_screenshot_settings", text='', icon='COPYDOWN')
-        col3.operator("scrshot.paste_screenshot_settings", text='', icon='PASTEDOWN')
-
-        if not len(context.scene.scrshot_camera_coll):
+            col3 = col2.column(align=True)
+            col3.operator("scrshot.copy_screenshot_settings", text='', icon='COPYDOWN')
+            col3.operator("scrshot.paste_screenshot_settings", text='', icon='PASTEDOWN')
+        else:
             box_col = layout.box().column(align=True)
             box_col.label(text='Add a new screenshot', icon='INFO')
             box_col.label(text='item to get started!', icon='BLANK1')

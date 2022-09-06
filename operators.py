@@ -174,8 +174,11 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
 
         # Manual dict values (only for when we need to cherry pick one or two values from each "group")
         self.saved_settings[overlay] = {'show_overlays': overlay.show_overlays}
-        self.saved_settings[scene] = {'camera': scene.camera}
+        #self.saved_settings[scene] = {'camera': scene.camera} # not working, do manually
         self.saved_settings[scene] = {'frame_current': scene.frame_current}
+
+        # Manual camera sync
+        self.saved_camera = scene.camera
 
 
     def load_saved_settings(self, context, ob_hide_states, coll_hide_states) -> None:
@@ -194,6 +197,9 @@ class SCRSHOT_OT_render_screenshots(OpInfo, Operator):
                     pass
                 except TypeError: # This seems to only happen with color depth (bad context), keep debug log for future exceptions
                     log.debug(f'{name}: {value} had a TypeError, this should be normal.')
+
+        # Manual camera sync
+        context.scene.camera = self.saved_camera
 
         # Unhide objects/collections hidden in the viewport
         for ob, vis in ob_hide_states.items():
@@ -467,18 +473,18 @@ class SCRSHOT_OT_add_screenshot_item(OpInfo, Operator):
         item.cam_res_x = scene.render.resolution_x
         item.cam_res_y = scene.render.resolution_y
 
-        idx_count = 1
+        idx_count = 0
         name_found = False
         while not name_found:
-            if f'screenshot_{idx_count}' in scene.scrshot_camera_coll:
-                idx_count += 1
-            else:
+            idx_count += 1
+
+            if f'screenshot_{idx_count}' not in scene.scrshot_camera_coll:
                 item.name = f"screenshot_{idx_count}"
                 name_found = True
 
         item.subfolder_name = item.name
 
-        ## Create & link a new camera to the new item
+        # Create & link a new camera to the new item
         camera_ob = self.create_coll_and_cam(context, active_scrshot_name=item.name)
         item.camera_ob = camera_ob
 
@@ -492,14 +498,10 @@ class SCRSHOT_OT_delete_screenshot_item(OpInfo, Operator):
     bl_label = "Delete Item"
     bl_options = {'INTERNAL'}
 
-    @classmethod
-    def poll(cls, context):
-        return active_screenshot_exists()
-
     def execute(self, context):
         scene = context.scene
 
-        try: # Might not be necessary?
+        try: # TODO Might not be necessary?
             camera_index = scene.scrshot_camera_index
             active_scrshot = scene.scrshot_camera_coll[camera_index]
 
@@ -553,6 +555,12 @@ class SCRSHOT_OT_select_and_preview(OpInfo, Operator):
         active_scrshot = scene.scrshot_camera_coll[self.scrshot_name]
         camera_ob = active_scrshot.camera_ob
 
+        try:
+            context.view_layer.objects.active = camera_ob
+        except RuntimeError:
+            self.report({'ERROR'}, "Camera could not be found in the current Viewlayer. Have you disabled it?")
+            return {'CANCELLED'}
+
         if self.preview_cam:
             scene.camera = camera_ob
 
@@ -565,11 +573,8 @@ class SCRSHOT_OT_select_and_preview(OpInfo, Operator):
         if (len(scene.scrshot_camera_coll)) > active_scrshot.id:
             scene.scrshot_camera_index = active_scrshot.id
 
-        # Deselect all objects
         for ob in context.selected_objects:
             ob.select_set(False)
-        
-        context.view_layer.objects.active = camera_ob
 
         camera_ob.hide_select = False
         camera_ob.select_set(True)
@@ -581,10 +586,6 @@ class SCRSHOT_OT_copy_screenshot_settings(OpInfo, Operator):
     bl_idname = "scrshot.copy_screenshot_settings"
     bl_label = "Copy Screenshot Settings"
     bl_options = {'INTERNAL'}
-
-    @classmethod
-    def poll(cls, context):
-        return active_screenshot_exists()
 
     def execute(self, context):
         active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
@@ -631,35 +632,27 @@ class SCRSHOT_OT_paste_screenshot_settings(OpInfo, Operator):
     bl_label = "Paste Screenshot Settings"
     bl_options = {'INTERNAL'}
 
-    @classmethod
-    def poll(cls, context):
-        addon_path = os.path.dirname(__file__)
-        screenshot_copy_path = os.path.join(addon_path, "temp\\latest_screenshot_copy.json")
-
-        return active_screenshot_exists() and os.path.isfile(screenshot_copy_path)
-
     def execute(self, context):
         # Add-on root path & temp file path
         addon_path = os.path.dirname(__file__)
         screenshot_copy_path = os.path.join(addon_path, "temp\\latest_screenshot_copy.json")
+        if not os.path.isfile(screenshot_copy_path):
+            self.report({'ERROR'}, "You haven't copied anything yet!")
+            return {'FINISHED'}
 
-        # Opening JSON file
-        scrshot_copy_json = open(screenshot_copy_path)
-        
-        # returns JSON object as a dictionary
-        scrshot_copy_data = json.load(scrshot_copy_json)
-        
-        # Iterating through the json list
-        active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
-        for key, value in scrshot_copy_data.items():
-            log.debug(f'{key} -> {value} {type(value)}')
+        with open(screenshot_copy_path) as scrshot_copy_json:
+            # Return JSON object as a dictionary
+            scrshot_copy_data = json.load(scrshot_copy_json)
+            
+            # Iterate through the json list
+            active_scrshot = context.scene.scrshot_camera_coll[context.scene.scrshot_camera_index]
+            for key, value in scrshot_copy_data.items():
+                log.debug(f'{key} -> {value} {type(value)}')
 
-            if key.startswith('ob_data_'):
-                setattr(active_scrshot.camera_ob.data, key[8:], value)
-            else:
-                setattr(active_scrshot, key, value)
-
-        scrshot_copy_json.close()
+                if key.startswith('ob_data_'):
+                    setattr(active_scrshot.camera_ob.data, key[8:], value)
+                else:
+                    setattr(active_scrshot, key, value)
 
         self.report({'INFO'}, "Camera Settings Pasted!")
         return {'FINISHED'}
