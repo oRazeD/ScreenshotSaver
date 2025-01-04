@@ -15,9 +15,9 @@ ScreenshotSaver is a Blender 3.0+ tool for easily rendering high-quality viewpor
 - Automatic folder creation for neat, reliable and organized file structure
 - Option to automatically render screenshots on file save for a hands-off approach to collecting progress shots
 - Built-in FFMPEG encoding support to convert your screenshots into an MP4 or GIF in one click!
-  - Set a framerate to control the playback speed  
+  - Set a framerate to control the playback speed
   - Add buffer frames at the start/end to "hold" on results
-  - Downscale encoded GIFs for smaller sizes to accomodate web uses
+  - Downscale encoded GIFs for smaller sizes to accommodate web uses
   - Automatically converts EXRs to the sRGB color space
 - ...And more!
 
@@ -36,3 +36,9 @@ https://user-images.githubusercontent.com/31065180/137642217-d51470d3-a243-438f-
 # Known Issues
 
 - In some very specific cases, GIF may fail to encode JPEGs due to an internal FFMPEG error. Sometimes finding and removing the bad image fixes this.
+
+# Support
+
+Screenshot Saver is a FOSS (Free and Open Source Software) project, which means I see very little return on my time spent developing and maintaining it.
+
+If you would like to support me, consider sending me a tip on [Ko-fi](https://ko-fi.com/razed)!
